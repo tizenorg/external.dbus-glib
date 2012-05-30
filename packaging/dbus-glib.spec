@@ -6,6 +6,7 @@ Group:      System/Libraries
 License:    AFL/GPL
 URL:        http://www.freedesktop.org/software/dbus/
 Source0:    http://dbus.freedesktop.org/releases/dbus-glib/dbus-glib-%{version}.tar.gz
+Source1001: packaging/dbus-glib.manifest 
 Requires(post): /sbin/ldconfig
 Requires(postun): /sbin/ldconfig
 BuildRequires:  pkgconfig(dbus-1)
@@ -32,6 +33,7 @@ Headers and static libraries for the D-Bus GLib bindings
 %setup -q 
 
 %build
+cp %{SOURCE1001} .
 
 %configure --disable-static \
     --disable-tests \
@@ -56,9 +58,11 @@ rm -rf $RPM_BUILD_ROOT/usr/libexec/dbus-bash-completion-helper
 %postun -p /sbin/ldconfig
 
 %files
+%manifest dbus-glib.manifest
 %{_libdir}/*glib*.so.*
 
 %files devel
+%manifest dbus-glib.manifest
 %{_libdir}/lib*.so
 %{_libdir}/pkgconfig/dbus-glib-1.pc
 %{_includedir}/dbus-1.0/dbus/*
