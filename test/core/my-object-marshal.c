@@ -1,3 +1,4 @@
+#include <config.h>
 
 #ifndef __my_object_marshal_MARSHAL_H__
 #define __my_object_marshal_MARSHAL_H__
@@ -8,7 +9,7 @@ G_BEGIN_DECLS
 
 #ifdef G_ENABLE_DEBUG
 #define g_marshal_value_peek_boolean(v)  g_value_get_boolean (v)
-#define g_marshal_value_peek_char(v)     g_value_get_char (v)
+#define g_marshal_value_peek_char(v)     g_value_get_schar (v)
 #define g_marshal_value_peek_uchar(v)    g_value_get_uchar (v)
 #define g_marshal_value_peek_int(v)      g_value_get_int (v)
 #define g_marshal_value_peek_uint(v)     g_value_get_uint (v)
@@ -53,7 +54,7 @@ G_BEGIN_DECLS
 #endif /* !G_ENABLE_DEBUG */
 
 
-/* NONE:STRING,INT,STRING (./my-object-marshal.list:1) */
+/* NONE:STRING,INT,STRING (/home/smcv/src/fdo/dbus-glib/test/core/my-object-marshal.list:1) */
 extern void my_object_marshal_VOID__STRING_INT_STRING (GClosure     *closure,
                                                        GValue       *return_value,
                                                        guint         n_param_values,
@@ -99,7 +100,7 @@ my_object_marshal_VOID__STRING_INT_STRING (GClosure     *closure,
 }
 #define my_object_marshal_NONE__STRING_INT_STRING	my_object_marshal_VOID__STRING_INT_STRING
 
-/* NONE:STRING,BOXED (./my-object-marshal.list:2) */
+/* NONE:STRING,BOXED (/home/smcv/src/fdo/dbus-glib/test/core/my-object-marshal.list:2) */
 extern void my_object_marshal_VOID__STRING_BOXED (GClosure     *closure,
                                                   GValue       *return_value,
                                                   guint         n_param_values,

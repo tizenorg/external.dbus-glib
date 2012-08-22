@@ -20,13 +20,36 @@ DBus GLib low level
 <!-- ##### SECTION Image ##### -->
 
 
-<!-- ##### FUNCTION dbus_set_g_error ##### -->
+<!-- ##### MACRO DBUS_TYPE_CONNECTION ##### -->
 <para>
 
 </para>
 
-@gerror: 
-@derror: 
+
+
+<!-- ##### MACRO DBUS_TYPE_MESSAGE ##### -->
+<para>
+
+</para>
+
+
+
+<!-- ##### FUNCTION dbus_connection_get_g_connection ##### -->
+<para>
+
+</para>
+
+@connection: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_connection_get_g_type ##### -->
+<para>
+
+</para>
+
+@void: 
+@Returns: 
 
 
 <!-- ##### FUNCTION dbus_connection_setup_with_g_main ##### -->
@@ -38,6 +61,70 @@ DBus GLib low level
 @context: 
 
 
+<!-- ##### FUNCTION dbus_g_connection_get_connection ##### -->
+<para>
+
+</para>
+
+@gconnection: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_message_get_message ##### -->
+<para>
+
+</para>
+
+@gmessage: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_method_get_reply ##### -->
+<para>
+
+</para>
+
+@context: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_method_get_sender ##### -->
+<para>
+
+</para>
+
+@context: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_method_send_reply ##### -->
+<para>
+
+</para>
+
+@context: 
+@reply: 
+
+
+<!-- ##### FUNCTION dbus_g_proxy_send ##### -->
+<para>
+
+</para>
+
+@proxy: 
+@message: 
+@client_serial: 
+
+
+<!-- ##### FUNCTION dbus_message_get_g_type ##### -->
+<para>
+
+</para>
+
+@void: 
+@Returns: 
+
+
 <!-- ##### FUNCTION dbus_server_setup_with_g_main ##### -->
 <para>
 
@@ -45,5 +132,14 @@ DBus GLib low level
 
 @server: 
 @context: 
+
+
+<!-- ##### FUNCTION dbus_set_g_error ##### -->
+<para>
+
+</para>
+
+@gerror: 
+@derror: 
 
 

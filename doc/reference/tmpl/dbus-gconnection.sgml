@@ -26,12 +26,30 @@ DBusGConnection
 </para>
 
 
+<!-- ##### MACRO DBUS_TYPE_G_CONNECTION ##### -->
+<para>
+
+</para>
+
+
+
 <!-- ##### FUNCTION dbus_g_bus_get ##### -->
 <para>
 
 </para>
 
 @type: 
+@error: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_bus_get_private ##### -->
+<para>
+
+</para>
+
+@type: 
+@context: 
 @error: 
 @Returns: 
 

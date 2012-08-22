@@ -11,16 +11,6 @@ INCLUDES = \
 
 lib_LTLIBRARIES=libdbus-glib-1.la
 
-dbus-glib-error-enum.h: make-dbus-glib-error-enum.sh
-	$(srcdir)/make-dbus-glib-error-enum.sh $(DBUS_INCLUDEDIR)/dbus-1.0/dbus/dbus-protocol.h $@
-
-dbus-glib-error-switch.h: make-dbus-glib-error-switch.sh
-	$(LIBTOOL) --mode=execute $(srcdir)/make-dbus-glib-error-switch.sh $(DBUS_INCLUDEDIR)/dbus-1.0/dbus/dbus-protocol.h $@
-
-BUILT_SOURCES = \
-	dbus-glib-error-switch.h		\
-	dbus-glib-error-enum.h
-
 CLEANFILES = $(BUILT_SOURCES)
 
 DBUS_GLIB_INTERNALS = \
@@ -35,7 +25,6 @@ DBUS_GLIB_INTERNALS = \
 	dbus-gvalue-utils.h
 
 libdbus_glib_1_la_SOURCES = 			\
-	dbus-glib-error-switch.h		\
 	dbus-glib.c				\
 	dbus-gmain.c				\
 	dbus-gmarshal.c				\
@@ -47,14 +36,15 @@ libdbus_glib_1_la_SOURCES = 			\
 	dbus-gtest.h				\
 	dbus-gvalue.c				\
 	dbus-gvalue.h				\
+	dbus-gvalue-parse-variant.c		\
 	dbus-gthread.c				\
 	$(DBUS_GLIB_INTERNALS)
 
 libdbus_glib_HEADERS =                  \
 	dbus-gtype-specialized.h	\
+        dbus-gvalue-parse-variant.h	\
 	dbus-glib.h			\
-        dbus-glib-lowlevel.h		\
-        dbus-glib-error-enum.h
+        dbus-glib-lowlevel.h
 
 libdbus_glibdir = $(includedir)/dbus-1.0/dbus
 
@@ -89,7 +79,8 @@ dbus_binding_tool_LDADD= $(builddir)/libdbus-gtool.la $(builddir)/libdbus-glib-1
 ## convincing automake/make to do this properly
 regenerate-built-sources:
 	@GLIB_GENMARSHAL@ --prefix=_dbus_g_marshal dbus-gmarshal.list --header > dbus-gmarshal.h && \
-	echo '#include "dbus-gmarshal.h"' > dbus-gmarshal.c &&					    \
+	echo '#include <config.h>' > dbus-gmarshal.c &&						    \
+	echo '#include "dbus-gmarshal.h"' >> dbus-gmarshal.c &&					    \
         @GLIB_GENMARSHAL@ --prefix=_dbus_g_marshal dbus-gmarshal.list --body >> dbus-gmarshal.c
 
 
@@ -105,10 +96,19 @@ CLEANFILES += dbus-bash-completion.sh
 
 dbus_bash_completion_helper_SOURCES =                 	\
 	dbus-bash-completion-helper.c
-dbus_bash_completion_helper_LDADD=$(DBUS_LIBS) $(DBUS_GLIB_LIBS) $(builddir)/libdbus-gtool.la -lexpat $(builddir)/libdbus-glib-1.la
+dbus_bash_completion_helper_LDADD=$(builddir)/libdbus-gtool.la -lexpat $(builddir)/libdbus-glib-1.la $(DBUS_LIBS) $(DBUS_GLIB_LIBS)
 
 
-EXTRA_DIST=dbus-gmarshal.list make-dbus-glib-error-switch.sh make-dbus-glib-error-enum.sh dbus-bash-completion.sh.in
+EXTRA_DIST=dbus-gmarshal.list dbus-bash-completion.sh.in
+
+Android.mk: Makefile.am
+	androgenizer -:PROJECT dbus-glib -:SHARED libdbus-glib-1 -:TAGS eng debug \
+	 -:REL_TOP $(top_srcdir) -:ABS_TOP $(abs_top_srcdir) \
+	 -:SOURCES $(libdbus_glib_1_la_SOURCES) \
+	 -:CFLAGS $(DEFS) $(CFLAGS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CFLAGS) \
+	 -:CPPFLAGS $(CPPFLAGS) $(AM_CPPFLAGS) \
+	 -:LDFLAGS $(libdbus_glib_1_la_LIBADD) $(libdbus_glib_1_la_LDFLAGS) \
+	> $@
 
 if DBUS_BUILD_TESTS
 

@@ -29,11 +29,6 @@
 #include "dbus-gobject.h"
 #include <string.h>
 
-#include <libintl.h>
-#define _(x) dgettext (GETTEXT_PACKAGE, x)
-#define N_(x) x
-
-
 /**
  * SECTION:dbus-gconnection
  * @short_description: DBus Connection
@@ -41,6 +36,13 @@
  * @stability: Stable
  *
  * A #DBusGConnection is a boxed type abstracting a DBusConnection.
+ */
+
+/**
+ * DBusGConnection:
+ *
+ * A #DBusGConnection is a boxed type abstracting a DBusConnection from
+ * libdbus.
  */
 
 /**
@@ -57,35 +59,35 @@ dbus_g_connection_flush (DBusGConnection *connection)
 
 /**
  * dbus_g_connection_ref:
- * @gconnection the #DBusGConnection to ref
+ * @connection: the #DBusGConnection to ref
  *
  * Increment refcount on a #DBusGConnection
  * 
  * Returns: the connection that was ref'd
  */
 DBusGConnection*
-dbus_g_connection_ref (DBusGConnection *gconnection)
+dbus_g_connection_ref (DBusGConnection *connection)
 {
   DBusConnection *c;
 
-  c = DBUS_CONNECTION_FROM_G_CONNECTION (gconnection);
+  c = DBUS_CONNECTION_FROM_G_CONNECTION (connection);
   dbus_connection_ref (c);
-  return gconnection;
+  return connection;
 }
 
 
 /**
  * dbus_g_connection_unref:
- * @gconnection: the connection to unref
+ * @connection: the connection to unref
  * 
  * Decrement refcount on a #DBusGConnection
  */
 void
-dbus_g_connection_unref (DBusGConnection *gconnection)
+dbus_g_connection_unref (DBusGConnection *connection)
 {
   DBusConnection *c;
 
-  c = DBUS_CONNECTION_FROM_G_CONNECTION (gconnection);
+  c = DBUS_CONNECTION_FROM_G_CONNECTION (connection);
   dbus_connection_unref (c);
 }
 
@@ -96,39 +98,46 @@ dbus_g_connection_unref (DBusGConnection *gconnection)
  * @see_also: #DBusMessage
  * @stability: Stable
  *
- * A #DBusGConnection is a boxed type abstracting a DBusMessage.
+ * A #DBusGMessage is a boxed type abstracting a DBusMessage.
+ */
+
+/**
+ * DBusGMessage:
+ *
+ * A #DBusGMessage is a boxed type abstracting a DBusMessage from
+ * libdbus.
  */
 
 /**
  * dbus_g_message_ref:
- * @gmessage: the message to ref
+ * @message: the message to ref
  *
  * Increment refcount on a #DBusGMessage
  * 
  * Returns: the message that was ref'd
  */
 DBusGMessage*
-dbus_g_message_ref (DBusGMessage *gmessage)
+dbus_g_message_ref (DBusGMessage *message)
 {
   DBusMessage *c;
 
-  c = DBUS_MESSAGE_FROM_G_MESSAGE (gmessage);
+  c = DBUS_MESSAGE_FROM_G_MESSAGE (message);
   dbus_message_ref (c);
-  return gmessage;
+  return message;
 }
 
 /**
  * dbus_g_message_unref:
- * @gmessage: the message to unref
+ * @message: the message to unref
  * 
  * Decrement refcount on a #DBusGMessage
  */
 void
-dbus_g_message_unref (DBusGMessage *gmessage)
+dbus_g_message_unref (DBusGMessage *message)
 {
   DBusMessage *c;
 
-  c = DBUS_MESSAGE_FROM_G_MESSAGE (gmessage);
+  c = DBUS_MESSAGE_FROM_G_MESSAGE (message);
   dbus_message_unref (c);
 }
 
@@ -142,12 +151,18 @@ dbus_g_message_unref (DBusGMessage *gmessage)
  */
 
 /**
- * dbus_g_error_quark:
+ * DBusGError:
  *
- * The implementation of #DBUS_GERROR error domain. See documentation
- * for #GError in GLib reference manual.
+ * A #GError enumeration for the domain %DBUS_GERROR. The values' meanings
+ * can be found by looking at the comments for the corresponding constants
+ * in dbus-protocol.h.
+ */
+
+/**
+ * DBUS_GERROR:
  *
- * Returns: the error domain quark for use with #GError
+ * Expands to a function call returning the error domain quark for #DBusGError,
+ * for use with #GError.
  */
 GQuark
 dbus_g_error_quark (void)
@@ -162,17 +177,16 @@ dbus_g_error_quark (void)
  * dbus_g_error_has_name:
  * @error: the GError given from the remote method
  * @name: the D-BUS error name
- * @msg: the D-BUS error detailed message
  *
  * Determine whether D-BUS error name for a remote exception matches
  * the given name.  This function is intended to be invoked on a
- * GError returned from an invocation of a remote method, e.g. via
- * dbus_g_proxy_end_call.  It will silently return FALSE for errors
+ * #GError returned from an invocation of a remote method, e.g. via
+ * dbus_g_proxy_end_call().  It will silently return %FALSE for errors
  * which are not remote D-BUS exceptions (i.e. with a domain other
- * than DBUS_GERROR or a code other than
- * DBUS_GERROR_REMOTE_EXCEPTION).
+ * than %DBUS_GERROR or a code other than
+ * %DBUS_GERROR_REMOTE_EXCEPTION).
  *
- * Returns: TRUE iff the remote error has the given name
+ * Returns: %TRUE if and only if the remote error has the given name
  */
 gboolean
 dbus_g_error_has_name (GError *error, const char *name)
@@ -189,13 +203,11 @@ dbus_g_error_has_name (GError *error, const char *name)
 /**
  * dbus_g_error_get_name:
  * @error: the #GError given from the remote method
- * @name: the D-BUS error name
- * @msg: the D-BUS error detailed message
  *
  * This function may only be invoked on a #GError returned from an
- * invocation of a remote method, e.g. via dbus_g_proxy_end_call.
- * Moreover, you must ensure that the error's domain is #DBUS_GERROR,
- * and the code is #DBUS_GERROR_REMOTE_EXCEPTION.
+ * invocation of a remote method, e.g. via dbus_g_proxy_end_call().
+ * Moreover, you must ensure that the error's domain is %DBUS_GERROR,
+ * and the code is %DBUS_GERROR_REMOTE_EXCEPTION.
  *
  * Returns: the D-BUS name for a remote exception.
  */
@@ -210,8 +222,11 @@ dbus_g_error_get_name (GError *error)
 }
 
 /**
- * dbus_connection_get_g_type:
- * Get the GLib type ID for a #DBusConnection boxed type.
+ * DBUS_TYPE_CONNECTION:
+ *
+ * Expands to a function call returning a boxed #GType representing a
+ * #DBusConnection pointer from libdbus. Not to be confused with
+ * %DBUS_TYPE_G_CONNECTION, which you should usually use instead.
  *
  * Returns: the GLib type
  */
@@ -229,8 +244,12 @@ dbus_connection_get_g_type (void)
 }
 
 /**
- * dbus_message_get_g_type:
- * Get the GLib type ID for a #DBusMessage boxed type.
+ * DBUS_TYPE_MESSAGE:
+ *
+ * Expands to a function call returning a boxed #GType representing a
+ * #DBusMessage pointer from libdbus. Not to be confused with
+ * %DBUS_TYPE_G_MESSAGE, which you should usually use instead.
+ *
  *
  * Returns: the GLib type
  */
@@ -248,8 +267,9 @@ dbus_message_get_g_type (void)
 }
 
 /**
- * dbus_g_connection_get_g_type:
- * Get the GLib type ID for a DBusGConnection boxed type.
+ * DBUS_TYPE_G_CONNECTION:
+ *
+ * Expands to a function call returning the boxed #GType of a #DBusGConnection.
  *
  * Returns: the GLib type
  */
@@ -267,8 +287,9 @@ dbus_g_connection_get_g_type (void)
 }
 
 /**
- * dbus_g_message_get_g_type:
- * Get the GLib type ID for a #DBusGMessage boxed type.
+ * DBUS_TYPE_G_MESSAGE:
+ *
+ * Expands to a function call returning the boxed #GType of a #DBusGConnection.
  *
  * Returns: the GLib type
  */
@@ -349,10 +370,9 @@ dbus_g_message_get_message (DBusGMessage *gmessage)
 
 #ifdef DBUS_BUILD_TESTS
 
-/**
- * @ingroup DBusGLibInternals
+/*
  * Unit test for general glib stuff
- * Returns: #TRUE on success.
+ * Returns: %TRUE on success.
  */
 gboolean
 _dbus_glib_test (const char *test_data_dir)

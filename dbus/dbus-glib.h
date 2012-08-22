@@ -32,11 +32,11 @@ G_BEGIN_DECLS
 #define DBUS_INSIDE_DBUS_GLIB_H 1
 
 
-/**
+/*
  * Convert to DBusConnection with dbus_g_connection_get_connection() in dbus-glib-lowlevel.h
  */
 typedef struct _DBusGConnection DBusGConnection;
-/**
+/*
  * Convert to DBusMessage with dbus_g_message_get_message() in dbus-glib-lowlevel.h
  */
 typedef struct _DBusGMessage DBusGMessage;
@@ -159,7 +159,7 @@ void       dbus_glib_global_set_disable_legacy_property_access (void);
 void       dbus_g_object_type_install_info     (GType                 object_type,
                                                 const DBusGObjectInfo *info);
 
-void       dbus_g_object_type_register_shadow_property (GType         object_type,
+void       dbus_g_object_type_register_shadow_property (GType         iface_type,
                                                         const char    *dbus_prop_name,
                                                         const char    *shadow_prop_name);
 
@@ -192,9 +192,11 @@ GObject *  dbus_g_connection_lookup_g_object   (DBusGConnection       *connectio
 
 #define DBUS_TYPE_G_STRING_STRING_HASHTABLE (dbus_g_type_get_map ("GHashTable", G_TYPE_STRING, G_TYPE_STRING))
 
+typedef gchar DBusGObjectPath;
 GType        dbus_g_object_path_get_g_type         (void) G_GNUC_CONST;
 #define DBUS_TYPE_G_OBJECT_PATH (dbus_g_object_path_get_g_type ())
 
+typedef gchar DBusGSignature;
 GType        dbus_g_signature_get_g_type           (void) G_GNUC_CONST;
 #define DBUS_TYPE_G_SIGNATURE (dbus_g_signature_get_g_type ())
 
@@ -218,11 +220,13 @@ typedef struct _DBusGProxyClass  DBusGProxyClass;
 
 struct _DBusGProxy
 {
+  /*< private >*/
   GObject parent;
 };
 
 struct _DBusGProxyClass
 {
+  /*< private >*/
   GObjectClass parent_class;  /**< Parent class */
 };
 
@@ -243,10 +247,10 @@ DBusGProxy*       dbus_g_proxy_new_for_name_owner    (DBusGConnection   *connect
                                                       GError           **error);
 DBusGProxy*       dbus_g_proxy_new_from_proxy        (DBusGProxy        *proxy,
                                                       const char        *iface,
-                                                      const char        *path_name);
+                                                      const char        *path);
 DBusGProxy*       dbus_g_proxy_new_for_peer          (DBusGConnection   *connection,
-                                                      const char        *path_name,
-                                                      const char        *interface_name);
+                                                      const char        *path,
+                                                      const char        *iface);
 
 void              dbus_g_proxy_set_interface         (DBusGProxy        *proxy,
 						      const char        *interface_name);
@@ -286,7 +290,7 @@ void              dbus_g_proxy_call_no_reply         (DBusGProxy        *proxy,
 DBusGProxyCall *  dbus_g_proxy_begin_call            (DBusGProxy        *proxy,
                                                       const char        *method,
 						      DBusGProxyCallNotify notify,
-						      gpointer           data,
+						      gpointer           user_data,
 						      GDestroyNotify     destroy,
                                                       GType              first_arg_type,
                                                       ...);
@@ -329,6 +333,8 @@ typedef struct {
 } DBusGAsyncData;
 
 #undef DBUS_INSIDE_DBUS_GLIB_H
+
+#include <dbus/dbus-gvalue-parse-variant.h>
 
 G_END_DECLS
 

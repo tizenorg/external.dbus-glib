@@ -31,12 +31,6 @@
     <method name="ThrowError">
     </method>
 
-    <method name="ThrowNotSupported">
-    </method>
-    
-    <method name="ThrowErrorMultiWord">
-    </method>
-
     <method name="ThrowUnregisteredError">
     </method>
 
@@ -180,6 +174,10 @@
 
     <!-- Export signals -->
     <signal name="Frobnicate"/>
+
+    <signal name="Objectified">
+      <arg type="o"/>
+    </signal>
 
     <method name="Terminate">
     </method>

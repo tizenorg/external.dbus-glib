@@ -1,3 +1,5 @@
+#include <config.h>
+
 /* -*- mode: C; c-file-style: "gnu" -*- */
 #include <dbus/dbus-glib.h>
 /* NOTE - outside of D-BUS core this would be
@@ -9,7 +11,6 @@
 #include <string.h>
 #include <glib/gi18n.h>
 #include <glib-object.h>
-#include <glib/gquark.h>
 
 #include "my-object.h"
 #include "my-object-subclass.h"

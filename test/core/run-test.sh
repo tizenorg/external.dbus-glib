@@ -18,7 +18,7 @@ export DBUS_TOP_SRCDIR
 if test -z "$DBUS_TEST_GLIB_IN_RUN_TEST"; then
   DBUS_TEST_GLIB_IN_RUN_TEST=1
   export DBUS_TEST_GLIB_IN_RUN_TEST
-  exec ${SHELL} $DBUS_TOP_SRCDIR/tools/run-with-tmp-session-bus.sh $SCRIPTNAME $MODE
+  exec $DBUS_TOP_SRCDIR/tools/run-with-tmp-session-bus.sh $SCRIPTNAME $MODE
 fi  
 
 if test x$MODE = xprofile ; then
@@ -44,8 +44,11 @@ else
     dbus-monitor --session &
   fi
   ${DBUS_TOP_BUILDDIR}/libtool --mode=execute $DEBUG $DBUS_TOP_BUILDDIR/test/core/test-types || die "test-types failed"
-  ${DBUS_TOP_BUILDDIR}/libtool --mode=execute $DEBUG $DBUS_TOP_BUILDDIR/test/core/test-5688 || die "test-5688 failed"
-  ${DBUS_TOP_BUILDDIR}/libtool --mode=execute $DEBUG $DBUS_TOP_BUILDDIR/test/core/test-unregister || die "test-unregister failed"
+  ${DBUS_TOP_BUILDDIR}/libtool --mode=execute $DEBUG $DBUS_TOP_BUILDDIR/test/core/test-registrations || die "test-registrations failed"
   ${DBUS_TOP_BUILDDIR}/libtool --mode=execute $DEBUG $DBUS_TOP_BUILDDIR/test/core/test-dbus-glib || die "test-dbus-glib failed"
   ${DBUS_TOP_BUILDDIR}/libtool --mode=execute $DEBUG $DBUS_TOP_BUILDDIR/test/core/test-variant-recursion || die "test-variant-recursion failed"
+  ${DBUS_TOP_BUILDDIR}/libtool --mode=execute $DEBUG $DBUS_TOP_BUILDDIR/test/core/test-gvariant || die "test-gvariant failed"
+  ${DBUS_TOP_BUILDDIR}/libtool --mode=execute $DEBUG $DBUS_TOP_BUILDDIR/test/core/test-30574 || die "test-30574 failed"
+  ${DBUS_TOP_BUILDDIR}/libtool --mode=execute $DEBUG $DBUS_TOP_BUILDDIR/test/core/test-error-mapping || die "test-error-mapping failed"
+  ${DBUS_TOP_BUILDDIR}/libtool --mode=execute $DEBUG $DBUS_TOP_BUILDDIR/test/core/test-peer-on-bus || die "test-peer-on-bus failed"
 fi

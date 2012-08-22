@@ -1,3 +1,31 @@
+/* General tests for dbus-glib. Please make new tests into a standalone
+ * binary using GTest instead, where feasible.
+ *
+ * Copyright © 2006-2010 Red Hat, Inc.
+ * Copyright © 2006-2010 Collabora Ltd.
+ * Copyright © 2006-2011 Nokia Corporation
+ * Copyright © 2006 Steve Frécinaux
+ *
+ * Licensed under the Academic Free License version 2.1
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+ * MA 02110-1301  USA
+ */
+
+#include <config.h>
+
 /* -*- mode: C; c-file-style: "gnu" -*- */
 #include <dbus/dbus-glib.h>
 #include <stdio.h>
@@ -8,9 +36,10 @@
 #include <dbus/dbus-gparser.h>
 #include <glib.h>
 #include <glib-object.h>
-#include "my-object-marshal.h"
+#include "my-object.h"
 
-static GMainLoop *loop = NULL;
+GMainLoop *loop = NULL;
+
 static const char *await_terminating_service = NULL;
 static int n_times_foo_received = 0;
 static int n_times_frobnicate_received = 0;
@@ -27,7 +56,8 @@ static gboolean proxy_destroy_and_nameowner_complete = FALSE;
 static DBusGProxy *test_terminate_proxy1 = NULL;
 static DBusGProxy *test_terminate_proxy2 = NULL;
 
-static void lose (const char *fmt, ...) G_GNUC_NORETURN G_GNUC_PRINTF (1, 2);
+#define lose(...) g_error (__VA_ARGS__)
+
 static void lose_gerror (const char *prefix, GError *error) G_GNUC_NORETURN;
 
 static void
@@ -293,6 +323,8 @@ test_base_class_get_all (DBusGConnection *connection,
   GError *error = NULL;
   GHashTable *hash = NULL;
 
+  /* g_test_bug (19145); */
+
   g_assert (expected_string_value != NULL);
   g_assert (object_path != NULL);
 
@@ -382,6 +414,8 @@ test_subclass_get_all (DBusGConnection *connection,
   GError *error = NULL;
   GHashTable *hash = NULL;
 
+  /* g_test_bug (19145); */
+
   g_assert (object_path != NULL);
 
   /* Test GetAll with interfaces on the subclass */
@@ -464,28 +498,14 @@ test_subclass_get_all (DBusGConnection *connection,
 }
 
 static void
-lose (const char *str, ...)
-{
-  va_list args;
-
-  va_start (args, str);
-
-  vfprintf (stderr, str, args);
-  fputc ('\n', stderr);
-
-  va_end (args);
-
-  exit (1);
-}
-
-static void
 lose_gerror (const char *prefix, GError *error) 
 {
   if (error->domain == DBUS_GERROR && error->code == DBUS_GERROR_REMOTE_EXCEPTION)
     lose ("%s (%s): %s", prefix, dbus_g_error_get_name (error),
 	  error->message);
   else
-    lose ("%s: %s", prefix, error->message);
+    lose ("%s: %s#%d: %s", prefix, g_quark_to_string (error->domain),
+        error->code, error->message);
 }
 
 static void
@@ -753,6 +773,9 @@ main (int argc, char **argv)
 				  increment_received_cb, g_strdup ("moo"), g_free,
 				  G_TYPE_UINT, 42,
 				  G_TYPE_INVALID);
+  if (call == NULL)
+    lose ("Failed to begin Increment call");
+
   dbus_g_connection_flush (connection);
   exit_timeout = g_timeout_add (5000, timed_exit, loop);
   g_main_loop_run (loop);
@@ -791,27 +814,6 @@ main (int argc, char **argv)
 	  error->message);
 
   g_print ("ThrowError failed (as expected) returned error: %s\n", error->message);
-  g_clear_error (&error);
-
-  g_print ("Calling ThrowNotSupported\n");
-  if (dbus_g_proxy_call (proxy, "ThrowNotSupported", &error,
-			 G_TYPE_INVALID, G_TYPE_INVALID) != FALSE)
-    lose ("ThrowNotSupported call unexpectedly succeeded!");
-
-  if (error->domain != DBUS_GERROR || error->code != DBUS_GERROR_NOT_SUPPORTED)
-    lose ("ThrowNotSupported call returned unexpected error: %s #%u: %s %s",
-          g_quark_to_string (error->domain), error->code,
-          dbus_g_error_get_name (error), error->message);
-
-  g_print ("ThrowNotSupported correctly returned error: %s\n", error->message);
-  g_clear_error (&error);
-
-  g_print ("Calling ThrowUnregisteredError\n");
-  if (dbus_g_proxy_call (proxy, "ThrowUnregisteredError", &error,
-			 G_TYPE_INVALID, G_TYPE_INVALID) != FALSE)
-    lose ("ThrowError call unexpectedly succeeded!");
-
-  g_print ("ThrowUnregisteredError failed (as expected) returned error: %s\n", error->message);
   g_clear_error (&error);
 
   g_print ("Calling IncrementRetvalError (for error)\n");
@@ -887,19 +889,6 @@ main (int argc, char **argv)
     lose ("(wrapped) ThrowError call unexpectedly succeeded!");
 
   g_print ("(wrapped) ThrowError failed (as expected) returned error: %s\n", error->message);
-  g_clear_error (&error);
-  
-  g_print ("Calling (wrapped) throw_error_multi_word\n");
-  if (org_freedesktop_DBus_GLib_Tests_MyObject_throw_error_multi_word (proxy, &error) != FALSE)
-    lose ("(wrapped) ThrowErrorMultiWord call unexpectedly succeeded!");
-
-  g_print ("(wrapped) ThrowErrorMultiWord failed (as expected) returned error: %s\n", error->message);
-  g_clear_error (&error);
-
-  if (org_freedesktop_DBus_GLib_Tests_MyObject_async_throw_error (proxy, &error) != FALSE)
-    lose ("(wrapped) AsyncThrowError call unexpectedly succeeded!");
-
-  g_print ("(wrapped) AsyncThrowError failed (as expected) returned error: %s\n", error->message);
   g_clear_error (&error);
 
   g_print ("Calling (wrapped) uppercase\n");
@@ -1703,11 +1692,7 @@ main (int argc, char **argv)
   if (proxy == NULL)
     lose_gerror ("Failed to create proxy for name owner", error);
 
-  dbus_g_object_register_marshaller (my_object_marshal_VOID__STRING_INT_STRING, 
-				     G_TYPE_NONE, G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INVALID);
-
-  dbus_g_object_register_marshaller (my_object_marshal_VOID__STRING_BOXED, 
-				     G_TYPE_NONE, G_TYPE_STRING, G_TYPE_VALUE, G_TYPE_INVALID);
+  my_object_register_marshallers ();
 
   dbus_g_proxy_add_signal (proxy, "Sig0", G_TYPE_STRING, G_TYPE_INT, G_TYPE_STRING, G_TYPE_INVALID);
   dbus_g_proxy_add_signal (proxy, "Sig1", G_TYPE_STRING, G_TYPE_VALUE, G_TYPE_INVALID);

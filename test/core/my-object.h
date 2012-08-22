@@ -7,11 +7,13 @@
 typedef struct MyObject MyObject;
 typedef struct MyObjectClass MyObjectClass;
 
+void my_object_register_marshallers (void);
 GType my_object_get_type (void);
 
 struct MyObject
 {
   GObject parent;
+  GError *saved_error;
   char *this_is_a_string;
   guint notouching;
   guint val;
@@ -35,7 +37,8 @@ typedef enum
 {
   MY_OBJECT_ERROR_FOO,
   MY_OBJECT_ERROR_BAR,
-  MY_OBJECT_ERROR_MULTI_WORD
+  MY_OBJECT_ERROR_MULTI_WORD,
+  MY_OBJECT_ERROR_UNDER_SCORE
 } MyObjectError;
 
 #define MY_OBJECT_ERROR (my_object_error_quark ())
@@ -114,5 +117,11 @@ void my_object_async_increment (MyObject *obj, gint32 x, DBusGMethodInvocation *
 void my_object_async_throw_error (MyObject *obj, DBusGMethodInvocation *context);
 
 void my_object_unsafe_disable_legacy_property_access (MyObject *obj);
+
+void my_object_emit_objectified (MyObject *obj, GObject *other);
+
+/* Not a D-Bus method. */
+void my_object_save_error (MyObject *obj, GQuark domain, gint code,
+    const gchar *message);
 
 #endif

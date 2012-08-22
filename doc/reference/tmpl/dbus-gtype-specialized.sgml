@@ -20,25 +20,6 @@ Specializable GType System
 <!-- ##### SECTION Image ##### -->
 
 
-<!-- ##### USER_FUNCTION DBusGTypeSpecializedCollectionIterator ##### -->
-<para>
-
-</para>
-
-@value: 
-@user_data: 
-
-
-<!-- ##### USER_FUNCTION DBusGTypeSpecializedMapIterator ##### -->
-<para>
-
-</para>
-
-@key_val: 
-@value_val: 
-@user_data: 
-
-
 <!-- ##### STRUCT DBusGTypeSpecializedAppendContext ##### -->
 <para>
 
@@ -46,72 +27,6 @@ Specializable GType System
 
 @val: 
 @specialization_type: 
-@b: 
-@c: 
-@d: 
-
-<!-- ##### USER_FUNCTION DBusGTypeSpecializedConstructor ##### -->
-<para>
-
-</para>
-
-@type: 
-@Returns: 
-
-
-<!-- ##### USER_FUNCTION DBusGTypeSpecializedFreeFunc ##### -->
-<para>
-
-</para>
-
-@type: 
-@val: 
-
-
-<!-- ##### USER_FUNCTION DBusGTypeSpecializedCopyFunc ##### -->
-<para>
-
-</para>
-
-@type: 
-@src: 
-@Returns: 
-
-
-<!-- ##### STRUCT DBusGTypeSpecializedVtable ##### -->
-<para>
-
-</para>
-
-@constructor: 
-@free_func: 
-@copy_func: 
-@simple_free_func: 
-@padding2: 
-@padding3: 
-
-<!-- ##### USER_FUNCTION DBusGTypeSpecializedCollectionFixedAccessorFunc ##### -->
-<para>
-
-</para>
-
-@type: 
-@instance: 
-@values: 
-@len: 
-@Returns: 
-
-
-<!-- ##### USER_FUNCTION DBusGTypeSpecializedCollectionIteratorFunc ##### -->
-<para>
-
-</para>
-
-@type: 
-@instance: 
-@iterator: 
-@user_data: 
-
 
 <!-- ##### USER_FUNCTION DBusGTypeSpecializedCollectionAppendFunc ##### -->
 <para>
@@ -130,6 +45,38 @@ Specializable GType System
 @ctx: 
 
 
+<!-- ##### USER_FUNCTION DBusGTypeSpecializedCollectionFixedAccessorFunc ##### -->
+<para>
+
+</para>
+
+@type: 
+@instance: 
+@values: 
+@len: 
+@Returns: 
+
+
+<!-- ##### USER_FUNCTION DBusGTypeSpecializedCollectionIterator ##### -->
+<para>
+
+</para>
+
+@value: 
+@user_data: 
+
+
+<!-- ##### USER_FUNCTION DBusGTypeSpecializedCollectionIteratorFunc ##### -->
+<para>
+
+</para>
+
+@type: 
+@instance: 
+@iterator: 
+@user_data: 
+
+
 <!-- ##### STRUCT DBusGTypeSpecializedCollectionVtable ##### -->
 <para>
 
@@ -141,15 +88,32 @@ Specializable GType System
 @append_func: 
 @end_append_func: 
 
-<!-- ##### USER_FUNCTION DBusGTypeSpecializedMapIteratorFunc ##### -->
+<!-- ##### USER_FUNCTION DBusGTypeSpecializedConstructor ##### -->
 <para>
 
 </para>
 
 @type: 
-@instance: 
-@iterator: 
-@user_data: 
+@Returns: 
+
+
+<!-- ##### USER_FUNCTION DBusGTypeSpecializedCopyFunc ##### -->
+<para>
+
+</para>
+
+@type: 
+@src: 
+@Returns: 
+
+
+<!-- ##### USER_FUNCTION DBusGTypeSpecializedFreeFunc ##### -->
+<para>
+
+</para>
+
+@type: 
+@val: 
 
 
 <!-- ##### USER_FUNCTION DBusGTypeSpecializedMapAppendFunc ##### -->
@@ -160,6 +124,27 @@ Specializable GType System
 @ctx: 
 @key: 
 @val: 
+
+
+<!-- ##### USER_FUNCTION DBusGTypeSpecializedMapIterator ##### -->
+<para>
+
+</para>
+
+@key_val: 
+@value_val: 
+@user_data: 
+
+
+<!-- ##### USER_FUNCTION DBusGTypeSpecializedMapIteratorFunc ##### -->
+<para>
+
+</para>
+
+@type: 
+@instance: 
+@iterator: 
+@user_data: 
 
 
 <!-- ##### STRUCT DBusGTypeSpecializedMapVtable ##### -->
@@ -204,6 +189,46 @@ Specializable GType System
 @get_member: 
 @set_member: 
 
+<!-- ##### STRUCT DBusGTypeSpecializedVtable ##### -->
+<para>
+
+</para>
+
+@constructor: 
+@free_func: 
+@copy_func: 
+@simple_free_func: 
+
+<!-- ##### FUNCTION dbus_g_type_collection_get_fixed ##### -->
+<para>
+
+</para>
+
+@value: 
+@data_ret: 
+@len_ret: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_type_collection_peek_vtable ##### -->
+<para>
+
+</para>
+
+@collection_type: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_type_collection_value_iterate ##### -->
+<para>
+
+</para>
+
+@value: 
+@iterator: 
+@user_data: 
+
+
 <!-- ##### FUNCTION dbus_g_type_get_collection ##### -->
 <para>
 
@@ -211,6 +236,15 @@ Specializable GType System
 
 @container: 
 @specialization: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_type_get_collection_specialization ##### -->
+<para>
+
+</para>
+
+@gtype: 
 @Returns: 
 
 
@@ -225,14 +259,21 @@ Specializable GType System
 @Returns: 
 
 
-<!-- ##### FUNCTION dbus_g_type_get_structv ##### -->
+<!-- ##### FUNCTION dbus_g_type_get_map_key_specialization ##### -->
 <para>
 
 </para>
 
-@container: 
-@num_members: 
-@types: 
+@gtype: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_type_get_map_value_specialization ##### -->
+<para>
+
+</para>
+
+@gtype: 
 @Returns: 
 
 
@@ -243,7 +284,37 @@ Specializable GType System
 
 @container: 
 @first_type: 
-@Varargs: 
+@...: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_type_get_struct_member_type ##### -->
+<para>
+
+</para>
+
+@gtype: 
+@member: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_type_get_struct_size ##### -->
+<para>
+
+</para>
+
+@gtype: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_type_get_structv ##### -->
+<para>
+
+</para>
+
+@container: 
+@num_members: 
+@types: 
 @Returns: 
 
 
@@ -274,116 +345,13 @@ Specializable GType System
 @Returns: 
 
 
-<!-- ##### FUNCTION dbus_g_type_get_collection_specialization ##### -->
+<!-- ##### FUNCTION dbus_g_type_map_peek_vtable ##### -->
 <para>
 
 </para>
 
-@gtype: 
+@map_type: 
 @Returns: 
-
-
-<!-- ##### FUNCTION dbus_g_type_get_map_key_specialization ##### -->
-<para>
-
-</para>
-
-@gtype: 
-@Returns: 
-
-
-<!-- ##### FUNCTION dbus_g_type_get_map_value_specialization ##### -->
-<para>
-
-</para>
-
-@gtype: 
-@Returns: 
-
-
-<!-- ##### FUNCTION dbus_g_type_get_struct_member_type ##### -->
-<para>
-
-</para>
-
-@gtype: 
-@member: 
-@Returns: 
-
-
-<!-- ##### FUNCTION dbus_g_type_get_struct_size ##### -->
-<para>
-
-</para>
-
-@gtype: 
-@Returns: 
-
-
-<!-- ##### FUNCTION dbus_g_type_specialized_construct ##### -->
-<para>
-
-</para>
-
-@gtype: 
-@Returns: 
-
-
-<!-- ##### FUNCTION dbus_g_type_specialized_init_append ##### -->
-<para>
-
-</para>
-
-@value: 
-@ctx: 
-
-
-<!-- ##### FUNCTION dbus_g_type_specialized_collection_append ##### -->
-<para>
-
-</para>
-
-@ctx: 
-@elt: 
-
-
-<!-- ##### FUNCTION dbus_g_type_specialized_collection_end_append ##### -->
-<para>
-
-</para>
-
-@ctx: 
-
-
-<!-- ##### FUNCTION dbus_g_type_specialized_map_append ##### -->
-<para>
-
-</para>
-
-@ctx: 
-@key: 
-@val: 
-
-
-<!-- ##### FUNCTION dbus_g_type_collection_get_fixed ##### -->
-<para>
-
-</para>
-
-@value: 
-@data: 
-@len: 
-@Returns: 
-
-
-<!-- ##### FUNCTION dbus_g_type_collection_value_iterate ##### -->
-<para>
-
-</para>
-
-@value: 
-@iterator: 
-@user_data: 
 
 
 <!-- ##### FUNCTION dbus_g_type_map_value_iterate ##### -->
@@ -394,58 +362,6 @@ Specializable GType System
 @value: 
 @iterator: 
 @user_data: 
-
-
-<!-- ##### FUNCTION dbus_g_type_struct_get_member ##### -->
-<para>
-
-</para>
-
-@value: 
-@member: 
-@dest: 
-@Returns: 
-
-
-<!-- ##### FUNCTION dbus_g_type_struct_set_member ##### -->
-<para>
-
-</para>
-
-@value: 
-@member: 
-@src: 
-@Returns: 
-
-
-<!-- ##### FUNCTION dbus_g_type_struct_get ##### -->
-<para>
-
-</para>
-
-@value: 
-@member: 
-@Varargs: 
-@Returns: 
-
-
-<!-- ##### FUNCTION dbus_g_type_struct_set ##### -->
-<para>
-
-</para>
-
-@value: 
-@member: 
-@Varargs: 
-@Returns: 
-
-
-<!-- ##### FUNCTION dbus_g_type_specialized_init ##### -->
-<para>
-
-</para>
-
-@void: 
 
 
 <!-- ##### FUNCTION dbus_g_type_register_collection ##### -->
@@ -468,24 +384,6 @@ Specializable GType System
 @flags: 
 
 
-<!-- ##### FUNCTION dbus_g_type_map_peek_vtable ##### -->
-<para>
-
-</para>
-
-@map_type: 
-@Returns: 
-
-
-<!-- ##### FUNCTION dbus_g_type_collection_peek_vtable ##### -->
-<para>
-
-</para>
-
-@collection_type: 
-@Returns: 
-
-
 <!-- ##### FUNCTION dbus_g_type_register_struct ##### -->
 <para>
 
@@ -496,6 +394,112 @@ Specializable GType System
 @flags: 
 
 
+<!-- ##### FUNCTION dbus_g_type_specialized_collection_append ##### -->
+<para>
+
+</para>
+
+@ctx: 
+@elt: 
+
+
+<!-- ##### FUNCTION dbus_g_type_specialized_collection_end_append ##### -->
+<para>
+
+</para>
+
+@ctx: 
+
+
+<!-- ##### FUNCTION dbus_g_type_specialized_construct ##### -->
+<para>
+
+</para>
+
+@gtype: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_type_specialized_init ##### -->
+<para>
+
+</para>
+
+@void: 
+
+
+<!-- ##### FUNCTION dbus_g_type_specialized_init_append ##### -->
+<para>
+
+</para>
+
+@value: 
+@ctx: 
+
+
+<!-- ##### FUNCTION dbus_g_type_specialized_map_append ##### -->
+<para>
+
+</para>
+
+@ctx: 
+@key: 
+@val: 
+
+
+<!-- ##### FUNCTION dbus_g_type_struct_get ##### -->
+<para>
+
+</para>
+
+@value: 
+@member: 
+@...: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_type_struct_get_member ##### -->
+<para>
+
+</para>
+
+@value: 
+@member: 
+@dest: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_type_struct_peek_vtable ##### -->
+<para>
+
+</para>
+
+@struct_type: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_type_struct_set ##### -->
+<para>
+
+</para>
+
+@value: 
+@member: 
+@...: 
+@Returns: 
+
+
+<!-- ##### FUNCTION dbus_g_type_struct_set_member ##### -->
+<para>
+
+</para>
+
+@value: 
+@member: 
+@src: 
+@Returns: 
+
+
 <!-- ##### FUNCTION dbus_g_value_build_g_variant ##### -->
 <para>
 
@@ -503,68 +507,5 @@ Specializable GType System
 
 @value: 
 @Returns: 
-
-
-<!-- ##### MACRO DBUS_TYPE_G_BOOLEAN_ARRAY ##### -->
-<para>
-
-</para>
-
-
-
-<!-- ##### MACRO DBUS_TYPE_G_UCHAR_ARRAY ##### -->
-<para>
-
-</para>
-
-
-
-<!-- ##### MACRO DBUS_TYPE_G_UINT_ARRAY ##### -->
-<para>
-
-</para>
-
-
-
-<!-- ##### MACRO DBUS_TYPE_G_INT_ARRAY ##### -->
-<para>
-
-</para>
-
-
-
-<!-- ##### MACRO DBUS_TYPE_G_UINT64_ARRAY ##### -->
-<para>
-
-</para>
-
-
-
-<!-- ##### MACRO DBUS_TYPE_G_INT64_ARRAY ##### -->
-<para>
-
-</para>
-
-
-
-<!-- ##### MACRO DBUS_TYPE_G_OBJECT_ARRAY ##### -->
-<para>
-
-</para>
-
-
-
-<!-- ##### MACRO DBUS_TYPE_G_STRING_STRING_HASHTABLE ##### -->
-<para>
-
-</para>
-
-
-
-<!-- ##### MACRO DBUS_TYPE_G_SIGNATURE ##### -->
-<para>
-
-</para>
-
 
 

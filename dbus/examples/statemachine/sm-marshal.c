@@ -1,3 +1,4 @@
+#include <config.h>
 
 #ifndef __sm_marshal_MARSHAL_H__
 #define __sm_marshal_MARSHAL_H__
@@ -8,7 +9,7 @@ G_BEGIN_DECLS
 
 #ifdef G_ENABLE_DEBUG
 #define g_marshal_value_peek_boolean(v)  g_value_get_boolean (v)
-#define g_marshal_value_peek_char(v)     g_value_get_char (v)
+#define g_marshal_value_peek_char(v)     g_value_get_schar (v)
 #define g_marshal_value_peek_uchar(v)    g_value_get_uchar (v)
 #define g_marshal_value_peek_int(v)      g_value_get_int (v)
 #define g_marshal_value_peek_uint(v)     g_value_get_uint (v)
@@ -53,7 +54,7 @@ G_BEGIN_DECLS
 #endif /* !G_ENABLE_DEBUG */
 
 
-/* VOID:STRING,BOXED (./sm-marshal.list:1) */
+/* VOID:STRING,BOXED (/home/smcv/src/fdo/dbus-glib/dbus/examples/statemachine/sm-marshal.list:1) */
 extern void sm_marshal_VOID__STRING_BOXED (GClosure     *closure,
                                            GValue       *return_value,
                                            guint         n_param_values,

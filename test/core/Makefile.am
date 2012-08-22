@@ -11,7 +11,9 @@ LDADD = \
 	$(DBUS_GLIB_THREADS_LIBS) \
 	$(DBUS_GLIB_LIBS) \
 	$(DBUS_LIBS) \
-	$(top_builddir)/dbus/libdbus-glib-1.la
+	$(top_builddir)/dbus/libdbus-glib-1.la \
+	$(top_builddir)/test/lib/libtest.la \
+	$(NULL)
 
 tool_ldadd = \
 	$(LDADD) \
@@ -48,37 +50,49 @@ endif
 ## build even when not doing "make check"
 noinst_PROGRAMS = \
 	test-dbus-glib \
+	test-error-mapping \
 	test-service-glib \
 	$(THREAD_APPS) \
 	peer-server \
 	peer-client \
 	test-types \
-	test-5688 \
-	test-unregister \
+	test-30574 \
+	test-peer-on-bus \
+	test-proxy-peer \
+	test-registrations \
 	test-variant-recursion \
 	test-gvariant
 
-test_5688_SOURCES = \
-	my-object.c \
-	my-object.h \
-	my-object-subclass.c \
-	my-object-subclass.h \
-	my-object-marshal.c \
-	5688.c
+test_30574_SOURCES = \
+	30574.c
 
-test_unregister_SOURCES = \
+test_proxy_peer_SOURCES = \
+	my-object-marshal.c \
+	my-object.c \
+	my-object.h \
+	proxy-peer.c
+
+test_registrations_SOURCES = \
 	my-object.c \
 	my-object.h \
 	my-object-subclass.c \
 	my-object-subclass.h \
 	my-object-marshal.c \
-	unregister.c
+	registrations.c
 
 test_dbus_glib_SOURCES=				\
-	my-object-marshal.c                             \
+	my-object.c \
+	my-object.h \
+	my-object-marshal.c \
 	test-dbus-glib.c
 
 test_dbus_glib_LDADD= $(tool_ldadd)
+
+test_error_mapping_SOURCES = \
+	my-object.c \
+	my-object.h \
+	my-object-marshal.c \
+	error-mapping.c
 
 test_variant_recursion_SOURCES=test-variant-recursion.c
 
@@ -104,7 +118,9 @@ test-service-glib-bindings.h: test-service-glib.xml $(top_builddir)/dbus/dbus-bi
 	$(DEBUG) $(DBUS_BINDING_TOOL) --prefix=my_object --mode=glib-client --output=test-service-glib-bindings.h $(srcdir)/test-service-glib.xml
 
 my-object-marshal.c: Makefile my-object-marshal.list
-	@GLIB_GENMARSHAL@ --prefix=my_object_marshal $(srcdir)/my-object-marshal.list --header --body > my-object-marshal.c
+	echo "#include <config.h>" > $@.tmp
+	@GLIB_GENMARSHAL@ --prefix=my_object_marshal $(srcdir)/my-object-marshal.list --header --body >> $@.tmp
+	mv $@.tmp $@
 
 my-object-marshal.h: Makefile my-object-marshal.list
 	@GLIB_GENMARSHAL@ --prefix=my_object_marshal $(srcdir)/my-object-marshal.list --header > my-object-marshal.h
@@ -126,6 +142,8 @@ test_types_SOURCES = \
 
 test_gvariant_SOURCES = \
 	test-gvariant.c
+
+test_peer_on_bus_SOURCES = peer-on-bus.c
 
 CLEANFILES = \
 	$(BUILT_SOURCES) \

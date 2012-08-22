@@ -1,7 +1,8 @@
 dnl -*- mode: m4 -*-
 AC_PREREQ(2.52)
 
-AC_INIT(dbus-glib, 0.88, [https://bugs.freedesktop.org/enter_bug.cgi?product=dbus])
+AC_INIT([dbus-glib], [0.100],
+  [https://bugs.freedesktop.org/enter_bug.cgi?product=dbus&component=GLib])
 
 AC_CANONICAL_HOST
 
@@ -12,10 +13,6 @@ AM_CONFIG_HEADER(config.h)
 # Honor aclocal flags
 ACLOCAL="$ACLOCAL $ACLOCAL_FLAGS"
 AC_CONFIG_MACRO_DIR(m4)
-
-GETTEXT_PACKAGE=dbus-glib-1
-AC_SUBST(GETTEXT_PACKAGE)
-AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE,"$GETTEXT_PACKAGE",[The name of the gettext domain])
 
  ## must come before we use the $USE_MAINTAINER_MODE variable later
 AM_MAINTAINER_MODE
@@ -28,16 +25,16 @@ m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 #
 
 ## increment if the interface has additions, changes, removals.
-LT_CURRENT=3
+LT_CURRENT=4
 
 ## increment any time the source changes; set to
 ##  0 if you increment CURRENT
-LT_REVISION=0
+LT_REVISION=2
 
 ## increment if any interfaces have been added; set to 0
 ## if any interfaces have been changed or removed. removal has
 ## precedence over adding, so set to 0 if both happened.
-LT_AGE=1
+LT_AGE=2
 
 AC_SUBST(LT_CURRENT)
 AC_SUBST(LT_REVISION)
@@ -53,7 +50,6 @@ AC_ARG_ENABLE(ansi, AS_HELP_STRING([--enable-ansi],[enable -ansi -pedantic gcc f
 AC_ARG_ENABLE(verbose-mode, AS_HELP_STRING([--enable-verbose-mode],[support verbose debug mode]),enable_verbose_mode=$enableval,enable_verbose_mode=$USE_MAINTAINER_MODE)
 AC_ARG_ENABLE(asserts, AS_HELP_STRING([--enable-asserts],[include assertion checks]),enable_asserts=$enableval,enable_asserts=$USE_MAINTAINER_MODE)
 AC_ARG_ENABLE(checks, AS_HELP_STRING([--enable-checks],[include sanity checks on public API]),enable_checks=$enableval,enable_checks=yes)
-AC_ARG_ENABLE(doxygen-docs, AS_HELP_STRING([--enable-doxygen-docs],[build DOXYGEN documentation (requires Doxygen)]),enable_doxygen_docs=$enableval,enable_doxygen_docs=auto)
 AC_ARG_ENABLE(gcov, AS_HELP_STRING([--enable-gcov],[compile with coverage profiling instrumentation (gcc only)]),enable_gcov=$enableval,enable_gcov=no)
 AC_ARG_ENABLE(bash-completion, AS_HELP_STRING([--enable-bash-completion],[install bash completion scripts]),enable_bash_completion=$enableval,enable_bash_completion=yes)
 AC_ARG_WITH(test-socket-dir, AS_HELP_STRING([--with-test-socket-dir=[dirname]],[Where to put sockets for make check]))
@@ -226,20 +222,11 @@ CPPFLAGS=`echo "$CPPFLAGS" | sed -e 's/ +/ /g'`
 changequote([,])dnl
 
 if test x$enable_gcov = xyes; then
-     ## so that config.h changes when you toggle gcov support
-     AC_DEFINE_UNQUOTED(DBUS_GCOV_ENABLED, 1, [Defined if gcov is enabled to force a rebuild due to config.h changing])
-
-     AC_MSG_CHECKING([for gcc 3.3 version of gcov file format])
-     have_gcc33_gcov=no
-     AC_RUN_IFELSE( [AC_LANG_PROGRAM( , [[ if (__GNUC__ >=3 && __GNUC_MINOR__ >= 3) exit (0); else exit (1); ]])],  
-                   have_gcc33_gcov=yes)
-     if test x$have_gcc33_gcov = xyes ; then
-         AC_DEFINE_UNQUOTED(DBUS_HAVE_GCC33_GCOV, 1, [Defined if we have gcc 3.3 and thus the new gcov format])
-     fi
-     AC_MSG_RESULT($have_gcc33_gcov)
+     # so that config.h changes when you toggle gcov support
+     AC_DEFINE_UNQUOTED([DBUS_GCOV_ENABLED],
+       [__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__],
+       [Defined to the gcc version if gcov is enabled, to force a rebuild due to config.h changing])
 fi
-AM_CONDITIONAL(DBUS_GCOV_ENABLED, test x$enable_gcov = xyes)
-
 
 #### Various functions
 AC_SEARCH_LIBS([socket], [socket])
@@ -327,24 +314,6 @@ fi
 # unix:path=/foo or unix:abstract=/foo 
 AC_SUBST(DBUS_PATH_OR_ABSTRACT)
 
-#### Sort out gettext
-
-# this makes us require GLib to run autoconf, but not at runtime
-ALL_LINGUAS=""
-AM_GLIB_GNU_GETTEXT
-
-# INTLLIBS is now set
-
-# (if someone wants to go through and make internationalization 
-#  conditional with #ifdef ENABLE_NLS then go crazy and send us a patch, 
-#  but right now we won't build without gettext)
-if test "$gt_cv_have_gettext" != "yes" ; then
-  AC_MSG_ERROR([
-*** You must have either have gettext support in your C library, or use the 
-*** GNU gettext library. (http://www.gnu.org/software/gettext/gettext.html
-])
-fi
-
 #### Sort out XML library
 
 # see what we have
@@ -362,37 +331,14 @@ XML_CFLAGS=
 
 #### Set up final flags
 
-PKG_CHECK_MODULES(DBUS, dbus-1 >= 1.1, have_dbus=yes, have_dbus=no)
-
-if test x$have_dbus = xno ; then
-    AC_MSG_ERROR([DBus development libraries not found])
-fi
-AM_CONDITIONAL(HAVE_DBUS, test x$have_dbus = xyes)
-
-AC_SUBST(DBUS_CFLAGS)
-AC_SUBST(DBUS_LIBS)
-
-DBUS_INCLUDEDIR=`pkg-config dbus-1 --variable=includedir`
-AC_SUBST(DBUS_INCLUDEDIR)
-DBUS_DAEMONDIR=`pkg-config dbus-1 --variable=daemondir`
-if test x"$DBUS_DAEMONDIR" != "x"; then
-    # Add slash, so that if the D-Bus pkgconfig file does not
-    # specify daemondir, the tools/Makefile.am file will look
-    # in the PATH for the daemon, as was previous behavior.
-    #
-    DBUS_DAEMONDIR="$DBUS_DAEMONDIR/"
-fi
-AC_SUBST(DBUS_DAEMONDIR)
+PKG_CHECK_MODULES([DBUS], [dbus-1 >= 1.2.16])
+AC_SUBST([DBUS_CFLAGS])
+AC_SUBST([DBUS_LIBS])
 
 # Glib detection
-PKG_CHECK_MODULES(DBUS_GLIB, gobject-2.0 >= 2.24, have_glib=yes, have_glib=no)
+PKG_CHECK_MODULES([DBUS_GLIB], [gobject-2.0 >= 2.26, gio-2.0 >= 2.26])
 PKG_CHECK_MODULES(DBUS_GLIB_THREADS, gthread-2.0 >= 2.6, have_glib_threads=yes, have_glib_threads=no)
 
-if test x$have_glib = xno ; then
-    AC_MSG_ERROR([GLib development libraries not found])
-fi
-
-AM_CONDITIONAL(HAVE_GLIB, test x$have_glib = xyes)
 AM_CONDITIONAL(HAVE_GLIB_THREADS, test x$have_glib_threads = xyes)
 
 GLIB_GENMARSHAL=`$PKG_CONFIG --variable=glib_genmarshal glib-2.0`
@@ -404,41 +350,12 @@ AC_SUBST(DBUS_GLIB_LIBS)
 AC_SUBST(DBUS_GLIB_THREADS_LIBS)
 
 DBUS_GLIB_TOOL_CFLAGS=$XML_CFLAGS
-DBUS_GLIB_TOOL_LIBS="$XML_LIBS $INTLLIBS"
+DBUS_GLIB_TOOL_LIBS="$XML_LIBS"
 AC_SUBST(DBUS_GLIB_TOOL_CFLAGS)
 AC_SUBST(DBUS_GLIB_TOOL_LIBS)
 
 ### gtk-doc Documentation
 GTK_DOC_CHECK(1.4)
-
-### Doxygen Documentation
-
-AC_PATH_PROG(DOXYGEN, doxygen, no)
-
-AC_MSG_CHECKING([whether to build Doxygen documentation])
-
-if test x$DOXYGEN = xno ; then
-    have_doxygen=no
-else
-    have_doxygen=yes
-fi
-
-if test x$enable_doxygen_docs = xauto ; then
-    if test x$have_doxygen = xno ; then
-        enable_doxygen_docs=no
-    else
-        enable_doxygen_docs=yes
-    fi
-fi
-
-if test x$enable_doxygen_docs = xyes; then
-    if test x$have_doxygen = xno; then
-	AC_MSG_ERROR([Building Doxygen docs explicitly required, but Doxygen not found])
-    fi
-fi
-
-AM_CONDITIONAL(DBUS_DOXYGEN_DOCS_ENABLED, test x$enable_doxygen_docs = xyes)
-AC_MSG_RESULT(yes)
 
 #### Have to go $localstatedir->$prefix/var->/usr/local/var   
 #### someone please fix this a better way...
@@ -533,10 +450,11 @@ test/interfaces/Makefile
 test/data/valid-service-files/debug-glib.service
 test/data/valid-service-files/debug-echo.service
 test/data/valid-service-files/interfaces-test.service
+test/lib/Makefile
+test/manual/Makefile
 tools/Makefile
 dbus-glib-1.pc
 dbus-glib-1-uninstalled.pc
-Doxyfile
 ])
 
 dnl ==========================================================================
@@ -555,7 +473,7 @@ echo "
 	compiler:		  ${CC}
 	cflags:		          ${CFLAGS}
 	cppflags:		  ${CPPFLAGS}
-        Doxygen:                  ${DOXYGEN}"
+"
 
 echo "
         Maintainer mode:          ${USE_MAINTAINER_MODE}
@@ -564,10 +482,8 @@ echo "
         Building verbose mode:    ${enable_verbose_mode}
         Building assertions:      ${enable_asserts}
         Building checks:          ${enable_checks}
-        Building Doxygen docs:    ${enable_doxygen_docs}
         Building Gtk-doc docs:    ${enable_gtk_doc}
         Bash Completion:          ${enable_bash_completion}
-        Gettext libs (empty OK):  ${INTLLIBS}
         Using XML parser:         ${with_xml}
         'make check' socket dir:  ${TEST_SOCKET_DIR}
 "

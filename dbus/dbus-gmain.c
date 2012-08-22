@@ -33,20 +33,9 @@
 #include "dbus-gsignature.h"
 #include <string.h>
 
-#include <libintl.h>
-#define _(x) dgettext (GETTEXT_PACKAGE, x)
-#define N_(x) x
-
-/**
- * @defgroup DBusGLibInternals GLib bindings implementation details
- * @ingroup  DBusInternals
- * @brief Implementation details of GLib bindings
- *
- * @{
- */
-
-/**
+/*
  * DBusGMessageQueue:
+ *
  * A GSource subclass for dispatching DBusConnection messages.
  * We need this on top of the IO handlers, because sometimes
  * there are messages to dispatch queued up but no IO pending.
@@ -238,6 +227,9 @@ io_handler_dispatch (GIOChannel   *source,
   return TRUE;
 }
 
+/* Attach the connection setup to the given watch, removing any
+ * previously-attached connection setup.
+ */
 static void
 connection_setup_add_watch (ConnectionSetup *cs,
                             DBusWatch       *watch)
@@ -249,8 +241,6 @@ connection_setup_add_watch (ConnectionSetup *cs,
   
   if (!dbus_watch_get_enabled (watch))
     return;
-  
-  g_assert (dbus_watch_get_data (watch) == NULL);
   
   flags = dbus_watch_get_flags (watch);
 
@@ -285,7 +275,7 @@ connection_setup_remove_watch (ConnectionSetup *cs,
 
   handler = dbus_watch_get_data (watch);
 
-  if (handler == NULL)
+  if (handler == NULL || handler->cs != cs)
     return;
   
   io_handler_destroy_source (handler);
@@ -499,50 +489,38 @@ static ConnectionSetup*
 connection_setup_new_from_old (GMainContext    *context,
                                ConnectionSetup *old)
 {
-  GSList *tmp;
   ConnectionSetup *cs;
 
   g_assert (old->context != context);
   
   cs = connection_setup_new (context, old->connection);
   
-  tmp = old->ios;
-  while (tmp != NULL)
+  while (old->ios != NULL)
     {
-      IOHandler *handler = tmp->data;
+      IOHandler *handler = old->ios->data;
 
       connection_setup_add_watch (cs, handler->watch);
-      
-      tmp = tmp->next;
+      /* The old handler will be removed from old->ios as a side-effect */
     }
 
-  tmp = old->timeouts;
-  while (tmp != NULL)
+  while (old->timeouts != NULL)
     {
-      TimeoutHandler *handler = tmp->data;
+      TimeoutHandler *handler = old->timeouts->data;
 
       connection_setup_add_timeout (cs, handler->timeout);
-      
-      tmp = tmp->next;
     }
 
   return cs;
 }
 
-/** @} */ /* End of GLib bindings internals */
-
-/** @addtogroup DBusGLib
- * @{
- */
-
 /**
  * dbus_connection_setup_with_g_main:
  * @connection: the connection
- * @context: the #GMainContext or #NULL for default context
+ * @context: the #GMainContext or %NULL for default context
  *
  * Sets the watch and timeout functions of a #DBusConnection
  * to integrate the connection with the GLib main loop.
- * Pass in #NULL for the #GMainContext unless you're
+ * Pass in %NULL for the #GMainContext unless you're
  * doing something specialized.
  *
  * If called twice for the same context, does nothing the second
@@ -616,11 +594,11 @@ dbus_connection_setup_with_g_main (DBusConnection *connection,
 /**
  * dbus_server_setup_with_g_main:
  * @server: the server
- * @context: the #GMainContext or #NULL for default
+ * @context: the #GMainContext or %NULL for default
  *
  * Sets the watch and timeout functions of a #DBusServer
  * to integrate the server with the GLib main loop.
- * In most cases the context argument should be #NULL.
+ * In most cases the context argument should be %NULL.
  *
  * If called twice for the same context, does nothing the second
  * time. If called once with context A and once with context B,
@@ -655,7 +633,8 @@ dbus_server_setup_with_g_main (DBusServer   *server,
       cs = connection_setup_new_from_old (context, old_setup);
       
       /* Nuke the old setup */
-      dbus_server_set_data (server, server_slot, NULL, NULL);
+      if (!dbus_server_set_data (server, server_slot, NULL, NULL))
+        goto nomem;
       old_setup = NULL;
     }
 
@@ -808,14 +787,11 @@ dbus_g_bus_get_private (DBusBusType     type,
   return DBUS_G_CONNECTION_FROM_CONNECTION (connection);
 }
 
-/** @} */ /* end of public API */
-
 #ifdef DBUS_BUILD_TESTS
 
-/**
- * @ingroup DBusGLibInternals
+/*
  * Unit test for GLib main loop integration
- * Returns: #TRUE on success.
+ * Returns: %TRUE on success.
  */
 gboolean
 _dbus_gmain_test (const char *test_data_dir)

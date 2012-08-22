@@ -26,6 +26,13 @@ DBusGMessage
 </para>
 
 
+<!-- ##### MACRO DBUS_TYPE_G_MESSAGE ##### -->
+<para>
+
+</para>
+
+
+
 <!-- ##### FUNCTION dbus_g_message_ref ##### -->
 <para>
 

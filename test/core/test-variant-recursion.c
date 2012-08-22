@@ -1,3 +1,5 @@
+#include <config.h>
+
 /* -*- mode: C; c-file-style: "gnu" -*- */
 #include <dbus/dbus-glib.h>
 #include <stdio.h>
@@ -84,6 +86,8 @@ main (int argc, char **argv)
   g_clear_error (&error);
 
   g_object_unref (G_OBJECT (proxy));
+
+  g_main_loop_unref (loop);
 
   return 0;
 }

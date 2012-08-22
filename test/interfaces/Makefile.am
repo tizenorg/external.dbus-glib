@@ -8,19 +8,34 @@ INCLUDES = \
 
 LDADD = $(DBUS_GLIB_LIBS) \
 	$(top_builddir)/dbus/libdbus-glib-1.la \
-	$(top_builddir)/dbus/libdbus-gtool.la
+	$(top_builddir)/dbus/libdbus-gtool.la \
+	$(top_builddir)/test/lib/libtest.la \
+	$(NULL)
 
 ## note that TESTS has special meaning (stuff to use in make check)
 ## so if adding tests not to be run in make check, don't add them to 
 ## TESTS
 if DBUS_BUILD_TESTS
-TESTS_ENVIRONMENT=DBUS_TOP_BUILDDIR=$(ABSOLUTE_TOP_BUILDDIR)
+TESTS_ENVIRONMENT = \
+	DBUS_TOP_BUILDDIR=$(ABSOLUTE_TOP_BUILDDIR) \
+	DBUS_BINDING_TOOL=$(DBUS_BINDING_TOOL) \
+	$(NULL)
 TESTS=run-test.sh
 else
 TESTS=
 endif
 
-EXTRA_DIST=run-test.sh test-goodbye.xml  test-hello.xml  test-song.xml test-dup-prop-a.xml test-dup-prop-b.xml
+EXTRA_DIST = \
+	invalid-annotated-node.xml \
+	invalid-nested-annotation.xml \
+	run-test.sh \
+	test-goodbye.xml \
+	test-hello.xml \
+	test-song.xml \
+	test-dup-prop-a.xml \
+	test-dup-prop-b.xml \
+	valid-annotations.xml \
+	$(NULL)
 
 if DBUS_BUILD_TESTS
 
@@ -52,7 +67,10 @@ BUILT_SOURCES = \
 	test-dup-prop-a-bindings.h \
 	test-dup-prop-a-bindings.h \
 	test-dup-prop-b-bindings.h \
-	test-dup-prop-b-bindings.h
+	test-dup-prop-b-bindings.h \
+	valid-annotations-glue.h \
+	valid-annotations-bindings.h \
+	$(NULL)
 
 test-song-glue.h: test-song.xml $(top_builddir)/dbus/dbus-binding-tool$(EXEEXT)
 	$(DBUS_BINDING_TOOL) --prefix=test_song --mode=glib-server --output=test-song-glue.h $(srcdir)/test-song.xml
@@ -84,6 +102,11 @@ test-dup-prop-b-glue.h: test-dup-prop-b.xml $(top_builddir)/dbus/dbus-binding-to
 test-dup-prop-b-bindings.h: test-dup-prop-b.xml $(top_builddir)/dbus/dbus-binding-tool$(EXEEXT)
 	$(DBUS_BINDING_TOOL) --prefix=test_dup_prop_b --mode=glib-client --output=test-dup-prop-b-bindings.h $(srcdir)/test-dup-prop-b.xml
 
+valid-annotations-glue.h: valid-annotations.xml $(top_builddir)/dbus/dbus-binding-tool$(EXEEXT)
+	$(DBUS_BINDING_TOOL) --prefix=test_annotated --mode=glib-server --output=$@ $<
+
+valid-annotations-bindings.h: valid-annotations.xml $(top_builddir)/dbus/dbus-binding-tool$(EXEEXT)
+	$(DBUS_BINDING_TOOL) --prefix=test_annotated --mode=glib-client --output=$@ $<
 
 CLEANFILES = \
 	$(BUILT_SOURCES) \

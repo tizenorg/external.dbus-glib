@@ -68,7 +68,7 @@ DBusGMethod
 </para>
 
 @context: 
-@Varargs: 
+@...: 
 
 
 <!-- ##### FUNCTION dbus_g_method_return_error ##### -->

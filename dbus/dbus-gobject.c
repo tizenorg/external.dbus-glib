@@ -35,6 +35,61 @@
 #include "dbus-gvalue-utils.h"
 #include <string.h>
 
+#include <gio/gio.h>
+
+G_GNUC_NORETURN static void
+oom (const gchar *explanation)
+{
+  g_error ("%s", explanation == NULL ? "Out of memory" : explanation);
+  g_assert_not_reached ();
+}
+
+static DBusMessage *
+reply_or_die (DBusMessage *in_reply_to)
+{
+  DBusMessage *reply;
+
+  g_return_val_if_fail (in_reply_to != NULL, NULL);
+
+  reply = dbus_message_new_method_return (in_reply_to);
+
+  if (reply == NULL)
+    oom ("dbus_message_new_method_return failed: out of memory?");
+
+  return reply;
+}
+
+static DBusMessage *
+error_or_die (DBusMessage *in_reply_to,
+    const gchar *error_name,
+    const gchar *error_message)
+{
+  DBusMessage *reply;
+
+  g_return_val_if_fail (in_reply_to != NULL, NULL);
+  /* error names are syntactically the same as interface names */
+  g_return_val_if_fail (g_dbus_is_interface_name (error_name), NULL);
+  g_return_val_if_fail (g_utf8_validate (error_message, -1, NULL), NULL);
+
+  reply = dbus_message_new_error (in_reply_to, error_name, error_message);
+
+  if (reply == NULL)
+    oom ("dbus_message_new_error failed: out of memory?");
+
+  return reply;
+}
+
+static void
+connection_send_or_die (DBusConnection *connection,
+    DBusMessage *message)
+{
+  g_return_if_fail (connection != NULL);
+  g_return_if_fail (message != NULL);
+
+  if (!dbus_connection_send (connection, message, NULL))
+    oom ("dbus_connection_send failed: out of memory?");
+}
+
 static char *lookup_property_name (GObject    *object,
                                    const char *wincaps_propiface,
                                    const char *requested_propname);
@@ -53,7 +108,8 @@ static GData *error_metadata = NULL;
 
 static char*
 uscore_to_wincaps_full (const char *uscore,
-                        gboolean    uppercase_first)
+                        gboolean    uppercase_first,
+                        gboolean    strip_underscores)
 {
   const char *p;
   GString *str;
@@ -65,7 +121,7 @@ uscore_to_wincaps_full (const char *uscore,
   p = uscore;
   while (p && *p)
     {
-      if (*p == '-' || *p == '_')
+      if (*p == '-' || (strip_underscores && *p == '_'))
         {
           last_was_uscore = TRUE;
         }
@@ -105,7 +161,7 @@ compare_strings_ignoring_uscore_vs_dash (const char *a, const char *b)
 static char *
 uscore_to_wincaps (const char *uscore)
 {
-  return uscore_to_wincaps_full (uscore, TRUE);
+  return uscore_to_wincaps_full (uscore, TRUE, TRUE);
 }
 
 static const char *
@@ -176,6 +232,46 @@ typedef enum
   RETVAL_ERROR
 } RetvalType;
 
+/*
+ * arg_iterate:
+ * @data: a pointer to the beginning of an argument entry in a string table
+ * @name: (out) (allow-none): used to return the name of the next argument
+ * @in: (out) (allow-none): used to return %TRUE for an "in" argument or
+ *    %FALSE for an "out" argument
+ * @constval: (out) (allow-none): used to return %TRUE if the argument is
+ *    an "out" argument and has the "C" (const) flag indicating that it
+ *    should not be freed after it is returned; normally, "out" arguments
+ *    are freed
+ * @retval: (out) (allow-none): used to return %RETVAL_NONE if this
+ *    D-Bus argument is not an "out" argument or is obtained like a C "out"
+ *    parameter, %RETVAL_ERROR if this argument is obtained from the C
+ *    return value and is also used to signal errors, or %RETVAL_NOERROR
+ *    if this argument is obtained from the C return value and the method
+ *    can never raise an error
+ * @type: (out) (allow-none): used to return the D-Bus signature of this
+ *    argument
+ *
+ * The data format is:
+ *
+ * argument name
+ * \0
+ * direction: I or O
+ * \0
+ * if direction == "O":
+ *     freeable? F or C
+ *     \0
+ *     retval? N, E or R
+ *     \0
+ * signature
+ * \0
+ *
+ * If none of the arguments has @retval != %RETVAL_NONE, the method is
+ * assumed to return a gboolean, which behaves like %RETVAL_ERROR but is
+ * not sent over D-Bus at all.
+ *
+ * Returns: the value of @data to use for the next call, or a pointer to '\0'
+ *    if this function must not be called again
+ */
 static const char *
 arg_iterate (const char    *data,
 	     const char   **name,
@@ -534,25 +630,61 @@ lookup_object_info_by_iface (GObject     *object,
 }
 
 typedef struct {
-    DBusGConnection *connection;
-    gchar *object_path;
+    /* owned */
+    GSList *registrations;
+    /* weak ref, or NULL if the object has been disposed */
     GObject *object;
+} ObjectExport;
+
+typedef struct {
+    /* pseudo-weak ref, never NULL */
+    DBusGConnection *connection;
+    /* owned, never NULL */
+    gchar *object_path;
+    /* borrowed pointer to parent, never NULL */
+    ObjectExport *export;
 } ObjectRegistration;
 
-static void object_registration_object_died (gpointer user_data, GObject *dead);
+static void object_export_object_died (gpointer user_data, GObject *dead);
+
+static void
+object_export_unregister_all (ObjectExport *oe)
+{
+  while (oe->registrations != NULL)
+    {
+      GSList *old = oe->registrations;
+      ObjectRegistration *o = oe->registrations->data;
+
+      dbus_connection_unregister_object_path (
+          DBUS_CONNECTION_FROM_G_CONNECTION (o->connection), o->object_path);
+
+      /* the link should have been removed by doing that */
+      g_assert (oe->registrations != old);
+    }
+}
+
+static void
+object_export_free (ObjectExport *oe)
+{
+  g_slice_free (ObjectExport, oe);
+}
+
+static ObjectExport *
+object_export_new (void)
+{
+  return g_slice_new0 (ObjectExport);
+}
 
 static ObjectRegistration *
 object_registration_new (DBusGConnection *connection,
                          const gchar *object_path,
-                         GObject *object)
+                         ObjectExport *export)
 {
   ObjectRegistration *o = g_slice_new0 (ObjectRegistration);
 
   o->connection = connection;
   o->object_path = g_strdup (object_path);
-  o->object = object;
-
-  g_object_weak_ref (o->object, object_registration_object_died, o);
+  o->export = export;
 
   return o;
 }
@@ -560,21 +692,8 @@ object_registration_new (DBusGConnection *connection,
 static void
 object_registration_free (ObjectRegistration *o)
 {
-  if (o->object != NULL)
-    {
-      GSList *registrations;
-
-      /* Ok, the object is still around; clear out this particular registration
-       * from the registrations list.
-       */
-      registrations = g_object_steal_data (o->object, "dbus_glib_object_registrations");
-      registrations = g_slist_remove (registrations, o);
-
-      if (registrations != NULL)
-        g_object_set_data (o->object, "dbus_glib_object_registrations", registrations);
-
-      g_object_weak_unref (o->object, object_registration_object_died, o);
-    }
+  g_assert (o->export != NULL);
+  o->export->registrations = g_slist_remove (o->export->registrations, o);
 
   g_free (o->object_path);
 
@@ -794,16 +913,12 @@ introspect_interfaces (GObject *object, GString *xml)
 
       for (i = 0; i < info->n_method_infos; i++)
         {
-          const char *method_name;
           const char *method_interface;
-          const char *method_args;
           const DBusGMethodInfo *method;
 
           method = &(info->method_infos[i]);
 
           method_interface = method_interface_from_object_info (info, method);
-          method_name = method_name_from_object_info (info, method);
-          method_args = method_arg_info_from_object_info (info, method);
 
           values = lookup_values (interfaces, method_interface);
           values->methods = g_slist_prepend (values->methods, (gpointer) method);
@@ -861,7 +976,7 @@ handle_introspect (DBusConnection *connection,
   if (!dbus_connection_list_registered (connection, 
                                         dbus_message_get_path (message),
                                         &children))
-    g_error ("Out of memory");
+    oom (NULL);
   
   xml = g_string_new (NULL);
 
@@ -911,15 +1026,13 @@ handle_introspect (DBusConnection *connection,
   /* Close the XML, and send it to the requesting app */
   g_string_append (xml, "</node>\n");
 
-  ret = dbus_message_new_method_return (message);
-  if (ret == NULL)
-    g_error ("Out of memory");
+  ret = reply_or_die (message);
 
   dbus_message_append_args (ret,
                             DBUS_TYPE_STRING, &xml->str,
                             DBUS_TYPE_INVALID);
 
-  dbus_connection_send (connection, ret, NULL);
+  connection_send_or_die (connection, ret);
   dbus_message_unref (ret);
 
   g_string_free (xml, TRUE);
@@ -956,22 +1069,23 @@ set_object_property (DBusConnection  *connection,
 
       g_value_unset (&value);
 
-      ret = dbus_message_new_method_return (message);
-      if (ret == NULL)
-        g_error ("out of memory");
+      ret = reply_or_die (message);
     }
   else
     {
-      ret = dbus_message_new_error (message,
-                                    DBUS_ERROR_INVALID_ARGS,
-                                    "Argument's D-BUS type can't be converted to a GType");
-      if (ret == NULL)
-        g_error ("out of memory");
+      ret = error_or_die (message,
+          DBUS_ERROR_INVALID_ARGS,
+          "Argument's D-BUS type can't be converted to a GType");
     }
 
   return ret;
 }
 
+/*
+ * @pspec: the paramspec for a D-Bus-exported property
+ *
+ * Returns: a reply for the Get() D-Bus method, either successful or error
+ */
 static DBusMessage*
 get_object_property (DBusConnection *connection,
                      DBusMessage    *message,
@@ -983,11 +1097,9 @@ get_object_property (DBusConnection *connection,
   gchar *variant_sig;
   DBusMessage *ret;
   DBusMessageIter iter, subiter;
+  gchar *error_message = NULL;
 
-  ret = dbus_message_new_method_return (message);
-  if (ret == NULL)
-    g_error ("out of memory");
-
+  ret = reply_or_die (message);
 
   g_value_init (&value, pspec->value_type);
   g_object_get_property (object, pspec->name, &value);
@@ -996,9 +1108,10 @@ get_object_property (DBusConnection *connection,
   if (variant_sig == NULL)
     {
       value_gtype = G_VALUE_TYPE (&value);
-      g_warning ("Cannot marshal type \"%s\" in variant", g_type_name (value_gtype));
-      g_value_unset (&value);
-      return ret;
+      error_message = g_strdup_printf (
+          "Internal error: cannot marshal type \"%s\" in variant",
+          g_type_name (value_gtype));
+      goto out;
     }
 
   dbus_message_iter_init_append (ret, &iter);
@@ -1007,23 +1120,34 @@ get_object_property (DBusConnection *connection,
 					 variant_sig,
 					 &subiter))
     {
-      g_free (variant_sig);
-      g_value_unset (&value);
-      return ret;
+      error_message = g_strdup_printf (
+          "Internal error: cannot open variant container for signature %s",
+          variant_sig);
+      goto out;
     }
 
   if (!_dbus_gvalue_marshal (&subiter, &value))
     {
-      dbus_message_unref (ret);
-      ret = dbus_message_new_error (message,
-                                    DBUS_ERROR_UNKNOWN_METHOD,
-                                    "Can't convert GType of object property to a D-BUS type");
+      dbus_message_iter_abandon_container (&iter, &subiter);
+      error_message = g_strdup_printf (
+          "Internal error: could not marshal type \"%s\" in variant",
+          G_VALUE_TYPE_NAME (&value));
+      goto out;
     }
 
   dbus_message_iter_close_container (&iter, &subiter);
 
+out:
   g_value_unset (&value);
   g_free (variant_sig);
+
+  if (error_message != NULL)
+    {
+      dbus_message_unref (ret);
+      ret = error_or_die (message, DBUS_ERROR_FAILED, error_message);
+      g_critical ("%s", error_message);
+      g_free (error_message);
+    }
 
   return ret;
 }
@@ -1145,12 +1269,11 @@ get_all_object_properties (DBusConnection        *connection,
   const char *p;
   char *uscore_propname;
 
-  ret = dbus_message_new_method_return (message);
-  if (ret == NULL)
-    goto oom;
+  ret = reply_or_die (message);
 
   dbus_message_iter_init_append (ret, &iter_ret);
 
+  /* the types are all hard-coded, so this can only fail via OOM */
   if (!dbus_message_iter_open_container (&iter_ret,
                                          DBUS_TYPE_ARRAY,
                                          DBUS_DICT_ENTRY_BEGIN_CHAR_AS_STRING
@@ -1158,7 +1281,7 @@ get_all_object_properties (DBusConnection        *connection,
                                          DBUS_TYPE_VARIANT_AS_STRING
                                          DBUS_DICT_ENTRY_END_CHAR_AS_STRING,
                                          &iter_dict))
-    goto oom;
+    oom (NULL);
 
   p = object_info->exported_properties;
   while (p != NULL && *p != '\0')
@@ -1173,6 +1296,15 @@ get_all_object_properties (DBusConnection        *connection,
       gchar *variant_sig;
 
       p = property_iterate (p, object_info->format_version, &prop_ifname, &prop_name, &prop_uscored, &access_flags);
+
+      /* Conventionally, property names are valid member names, but dbus-glib
+       * doesn't enforce this, and some dbus-glib services use GObject-style
+       * property names (e.g. "foo-bar"). */
+      if (!g_utf8_validate (prop_name, -1, NULL))
+        {
+          g_critical ("property name isn't UTF-8: %s", prop_name);
+          continue;
+        }
 
       uscore_propname = lookup_property_name (object, wincaps_propiface, prop_name);
 
@@ -1198,40 +1330,71 @@ get_all_object_properties (DBusConnection        *connection,
           continue;
         }
 
+      /* a signature returned by _dbus_gvalue_to_signature had better be
+       * valid */
+      g_assert (g_variant_is_signature (variant_sig));
+
+      /* type is hard-coded, so this can't fail except by OOM */
       if (!dbus_message_iter_open_container (&iter_dict,
                                              DBUS_TYPE_DICT_ENTRY,
                                              NULL,
                                              &iter_dict_entry))
-        goto oom;
-      if (!dbus_message_iter_append_basic (&iter_dict_entry, DBUS_TYPE_STRING, &prop_name))
-        goto oom;
+        oom (NULL);
 
+      /* prop_name is valid UTF-8, so this can't fail except by OOM; no point
+       * in abandoning @iter_dict_entry since we're about to crash out */
+      if (!dbus_message_iter_append_basic (&iter_dict_entry, DBUS_TYPE_STRING, &prop_name))
+        oom (NULL);
+
+      /* variant_sig has been asserted to be valid, so this can't fail
+       * except by OOM */
       if (!dbus_message_iter_open_container (&iter_dict_entry,
                                              DBUS_TYPE_VARIANT,
                                              variant_sig,
                                              &iter_dict_value))
-        goto oom;
+        oom (NULL);
 
+      g_free (variant_sig);
+
+      /* this can fail via programming error: the GObject property was
+       * malformed (non-UTF8 string or something) */
       if (!_dbus_gvalue_marshal (&iter_dict_value, &value))
-        goto oom;
+        {
+          gchar *contents = g_strdup_value_contents (&value);
+          gchar *error_message = g_strdup_printf (
+              "cannot GetAll(%s): failed to serialize %s value of type %s: %s",
+              wincaps_propiface, prop_name, G_VALUE_TYPE_NAME (&value),
+              contents);
 
+          g_critical ("%s", error_message);
+
+          /* abandon ship! */
+          dbus_message_iter_abandon_container (&iter_dict_entry,
+              &iter_dict_value);
+          dbus_message_iter_abandon_container (&iter_dict, &iter_dict_entry);
+          dbus_message_unref (ret);
+          ret = error_or_die (message, DBUS_ERROR_FAILED, error_message);
+
+          g_free (contents);
+          g_free (error_message);
+          g_value_unset (&value);
+          return ret;
+        }
+
+      /* these shouldn't fail except by OOM now that we were successful */
       if (!dbus_message_iter_close_container (&iter_dict_entry,
                                               &iter_dict_value))
-        goto oom;
+        oom (NULL);
       if (!dbus_message_iter_close_container (&iter_dict, &iter_dict_entry))
-        goto oom;
+        oom (NULL);
 
       g_value_unset (&value);
-      g_free (variant_sig);
   }
 
   if (!dbus_message_iter_close_container (&iter_ret, &iter_dict))
-    goto oom;
+    oom (NULL);
 
   return ret;
-
- oom:
-  g_error ("out of memory");
 }
 
 static gboolean
@@ -1328,7 +1491,16 @@ gerror_domaincode_to_dbus_error_name (const DBusGObjectInfo *object_info,
 	  g_type_class_unref (klass);
 
 	  domain_str = info->default_iface;
-	  code_str = value->value_nick;
+	  if (value)
+            {
+              code_str = value->value_nick;
+            }
+          else
+            {
+              g_warning ("Error code %d out of range for GError domain %s",
+                         code, g_quark_to_string (domain));
+              code_str = NULL;
+            }
 	}
     }
 
@@ -1351,7 +1523,8 @@ gerror_domaincode_to_dbus_error_name (const DBusGObjectInfo *object_info,
           g_free (uscored);
         }
 
-      g_string_append_printf (dbus_error_name, "Code%d", code);
+      /* Map -1 to (unsigned) -1 to avoid "-", which is not valid */
+      g_string_append_printf (dbus_error_name, "Code%u", (unsigned) code);
     }
   else
     {
@@ -1362,7 +1535,7 @@ gerror_domaincode_to_dbus_error_name (const DBusGObjectInfo *object_info,
        * reasons; if someone had a lowercase enumeration value,
        * previously we'd just send it across unaltered.
        */
-      code_str_wincaps = uscore_to_wincaps_full (code_str, FALSE);
+      code_str_wincaps = uscore_to_wincaps_full (code_str, FALSE, FALSE);
       g_string_append (dbus_error_name, code_str_wincaps);
       g_free (code_str_wincaps);
     }
@@ -1382,7 +1555,7 @@ gerror_to_dbus_error_message (const DBusGObjectInfo *object_info,
       char *error_msg;
       
       error_msg = g_strdup_printf ("Method invoked for %s returned FALSE but did not set error", dbus_message_get_member (message));
-      reply = dbus_message_new_error (message, "org.freedesktop.DBus.GLib.ErrorError", error_msg);
+      reply = error_or_die (message, "org.freedesktop.DBus.GLib.ErrorError", error_msg);
       g_free (error_msg);
     }
   else
@@ -1452,7 +1625,7 @@ gerror_to_dbus_error_message (const DBusGObjectInfo *object_info,
               break;
             }
 
-          reply = dbus_message_new_error (message, name, error->message);
+          reply = error_or_die (message, name, error->message);
         }
       else
 	{
@@ -1460,10 +1633,11 @@ gerror_to_dbus_error_message (const DBusGObjectInfo *object_info,
 	  error_name = gerror_domaincode_to_dbus_error_name (object_info,
 							     dbus_message_get_interface (message),
 							     error->domain, error->code);
-	  reply = dbus_message_new_error (message, error_name, error->message);
-	  g_free (error_name); 
-	}
+          reply = error_or_die (message, error_name, error->message);
+          g_free (error_name);
+        }
     }
+
   return reply;
 }
 
@@ -1477,6 +1651,8 @@ gerror_to_dbus_error_message (const DBusGObjectInfo *object_info,
  */
 
 /**
+ * DBusGMethodInvocation:
+ *
  * The context of an asynchronous method call.  See dbus_g_method_return() and
  * dbus_g_method_return_error().
  */
@@ -1505,7 +1681,6 @@ invoke_object_method (GObject         *object,
   GValueArray *out_param_gvalues = NULL;
   int out_param_count;
   int out_param_pos, out_param_gvalue_pos;
-  DBusHandlerResult result;
   DBusMessage *reply = NULL;
   gboolean have_retval;
   gboolean retval_signals_error;
@@ -1564,8 +1739,8 @@ invoke_object_method (GObject         *object,
       {
 	g_free (in_signature); 
 	g_array_free (types_array, TRUE);
-	reply = dbus_message_new_error (message, "org.freedesktop.DBus.GLib.ErrorError", error->message);
-	dbus_connection_send (connection, reply, NULL);
+        reply = error_or_die (message, "org.freedesktop.DBus.GLib.ErrorError", error->message);
+        connection_send_or_die (connection, reply);
 	dbus_message_unref (reply);
 	g_error_free (error);
 	return DBUS_HANDLER_RESULT_HANDLED;
@@ -1727,9 +1902,9 @@ invoke_object_method (GObject         *object,
 		      NULL, method->function);
   if (is_async)
     {
-      result = DBUS_HANDLER_RESULT_HANDLED;
       goto done;
     }
+
   if (retval_signals_error)
     had_error = _dbus_gvalue_signals_error (&return_value);
   else
@@ -1746,9 +1921,7 @@ invoke_object_method (GObject         *object,
        */
       if (send_reply)
         {
-          reply = dbus_message_new_method_return (message);
-          if (reply == NULL)
-            goto nomem;
+          reply = reply_or_die (message);
 
           /* Append output arguments to reply */
           dbus_message_iter_init_append (reply, &iter);
@@ -1756,9 +1929,22 @@ invoke_object_method (GObject         *object,
 
       /* First, append the return value, unless it's synthetic */
       if (have_retval && !retval_is_synthetic)
-	{ 
-	  if (send_reply && !_dbus_gvalue_marshal (&iter, &return_value))
-	    goto nomem;
+	{
+          if (reply != NULL && !_dbus_gvalue_marshal (&iter, &return_value))
+            {
+              gchar *desc = g_strdup_value_contents (&return_value);
+
+              g_critical ("unable to append retval of type %s for %s: %s",
+                  G_VALUE_TYPE_NAME (&return_value),
+                  method_name_from_object_info (object_info, method),
+                  desc);
+              g_free (desc);
+              /* the reply is now unusable but we still need to free
+               * everything */
+              dbus_message_unref (reply);
+              reply = NULL;
+            }
+
 	  if (!retval_is_constant)
 	    g_value_unset (&return_value);
 	}
@@ -1808,9 +1994,22 @@ invoke_object_method (GObject         *object,
 	      g_value_set_static_boxed (&gvalue, out_param_gvalues->values + out_param_gvalue_pos);
 	      out_param_gvalue_pos++;
 	    }
-	      
-	  if (send_reply && !_dbus_gvalue_marshal (&iter, &gvalue))
-	    goto nomem;
+
+          if (reply && !_dbus_gvalue_marshal (&iter, &gvalue))
+            {
+              gchar *desc = g_strdup_value_contents (&gvalue);
+
+              g_critical ("unable to append OUT arg of type %s for %s: %s",
+                  G_VALUE_TYPE_NAME (&gvalue),
+                  method_name_from_object_info (object_info, method),
+                  desc);
+              g_free (desc);
+              /* the reply is now unusable but we still need to free
+               * everything */
+              dbus_message_unref (reply);
+              reply = NULL;
+            }
+
 	  /* Here we actually free the allocated value; we
 	   * took ownership of it with _dbus_gvalue_take, unless
 	   * an annotation has specified this value as constant.
@@ -1824,13 +2023,13 @@ invoke_object_method (GObject         *object,
 
   if (reply)
     {
-      dbus_connection_send (connection, reply, NULL);
+      connection_send_or_die (connection, reply);
       dbus_message_unref (reply);
     }
 
-  result = DBUS_HANDLER_RESULT_HANDLED;
- done:
+done:
   g_free (in_signature);
+
   if (!is_async)
     {
       g_array_free (out_param_values, TRUE);
@@ -1841,12 +2040,23 @@ invoke_object_method (GObject         *object,
     g_clear_error (&gerror);
 
   g_value_array_free (value_array);
-  return result;
- nomem:
-  result = DBUS_HANDLER_RESULT_NEED_MEMORY;
-  goto done;
+  return DBUS_HANDLER_RESULT_HANDLED;
 }
 
+/*
+ * @wincaps_propiface: the D-Bus interface name, conventionally WindowsCaps
+ * @requested_propname: the D-Bus property name, conventionally WindowsCaps
+ * @uscore_propname: the GObject property name, conventionally
+ *    words_with_underscores or words-with-dashes
+ * @is_set: %TRUE if we're going to set the property, %FALSE if we're going
+ *    to get it
+ *
+ * Check that the requested property exists and the requested access is
+ * allowed. If not, reply with a D-Bus AccessDenied error message.
+ *
+ * Returns: %TRUE if property access can continue, or %FALSE if an error
+ *    reply has been sent
+ */
 static gboolean
 check_property_access (DBusConnection  *connection,
                        DBusMessage     *message,
@@ -1859,6 +2069,7 @@ check_property_access (DBusConnection  *connection,
   const DBusGObjectInfo *object_info;
   const char *access_type;
   DBusMessage *ret;
+  gchar *error_message;
 
   if (!is_set && !disable_legacy_property_access)
     return TRUE;
@@ -1866,14 +2077,11 @@ check_property_access (DBusConnection  *connection,
   object_info = lookup_object_info_by_iface (object, wincaps_propiface, TRUE, NULL);
   if (!object_info)
     {
-      ret = dbus_message_new_error_printf (message,
-                                           DBUS_ERROR_ACCESS_DENIED,
-                                           "Interface \"%s\" isn't exported (or may not exist), can't access property \"%s\"",
-                                           wincaps_propiface,
-                                           requested_propname);
-      dbus_connection_send (connection, ret, NULL);
-      dbus_message_unref (ret);
-      return FALSE;
+      error_message = g_strdup_printf (
+          "Interface \"%s\" isn't exported (or may not exist), can't access property \"%s\"",
+          wincaps_propiface, requested_propname);
+
+      goto error;
     }
 
   /* Try both forms of property names: "foo_bar" or "FooBar"; for historical
@@ -1883,32 +2091,37 @@ check_property_access (DBusConnection  *connection,
       && !(property_info_from_object_info (object_info, wincaps_propiface, requested_propname, &access_type)
            || property_info_from_object_info (object_info, wincaps_propiface, uscore_propname, &access_type)))
     {
-      ret = dbus_message_new_error_printf (message,
-                                           DBUS_ERROR_ACCESS_DENIED,
-                                           "Property \"%s\" of interface \"%s\" isn't exported (or may not exist)",
-                                           requested_propname,
-                                           wincaps_propiface);
-      dbus_connection_send (connection, ret, NULL);
-      dbus_message_unref (ret);
-      return FALSE;
+      error_message = g_strdup_printf (
+          "Property \"%s\" of interface \"%s\" isn't exported (or may not exist)",
+          requested_propname, wincaps_propiface);
+
+      goto error;
     }
 
   if (strcmp (access_type, "readwrite") == 0)
     return TRUE;
-  else if (is_set ? strcmp (access_type, "read") == 0
+
+  if (is_set ? strcmp (access_type, "read") == 0
              : strcmp (access_type, "write") == 0)
     {
-       ret = dbus_message_new_error_printf (message,
-                                           DBUS_ERROR_ACCESS_DENIED,
-                                           "Property \"%s\" of interface \"%s\" is not %s",
-                                           requested_propname,
-                                           wincaps_propiface,
-                                           is_set ? "settable" : "readable");
-      dbus_connection_send (connection, ret, NULL);
-      dbus_message_unref (ret);
-      return FALSE;
+      error_message = g_strdup_printf (
+          "Property \"%s\" of interface \"%s\" is not %s",
+          requested_propname,
+          wincaps_propiface,
+          is_set ? "settable" : "readable");
+
+      goto error;
     }
+
   return TRUE;
+
+error:
+  ret = error_or_die (message, DBUS_ERROR_ACCESS_DENIED, error_message);
+  g_free (error_message);
+
+  connection_send_or_die (connection, ret);
+  dbus_message_unref (ret);
+  return FALSE;
 }
 
 static DBusHandlerResult
@@ -1931,7 +2144,11 @@ object_registration_message (DBusConnection  *connection,
   ObjectRegistration *o;
 
   o = user_data;
-  object = G_OBJECT (o->object);
+  /* export is always non-NULL. If the object has been disposed, the weak-ref
+   * callback removes all registrations from the DBusConnection, so this
+   * should never be reached with object = NULL. */
+  object = G_OBJECT (o->export->object);
+  g_assert (object != NULL);
 
   if (dbus_message_is_method_call (message,
                                    DBUS_INTERFACE_INTROSPECTABLE,
@@ -1972,8 +2189,9 @@ object_registration_message (DBusConnection  *connection,
 
   if (dbus_message_iter_get_arg_type (&iter) != DBUS_TYPE_STRING)
     {
-      g_warning ("Property get or set does not have an interface string as first arg\n");
-      return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+      ret = error_or_die (message, DBUS_ERROR_INVALID_ARGS,
+          "First argument to Get(), GetAll() or Set() must be an interface string");
+      goto out;
     }
 
   dbus_message_iter_get_basic (&iter, &wincaps_propiface);
@@ -1987,13 +2205,17 @@ object_registration_message (DBusConnection  *connection,
       else
           return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
     }
-  else if (getter || setter)
+  else
     {
+      g_assert (getter || setter);
+
       if (dbus_message_iter_get_arg_type (&iter) != DBUS_TYPE_STRING)
         {
-          g_warning ("Property get or set does not have a property name string as second arg\n");
-          return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+          ret = error_or_die (message, DBUS_ERROR_INVALID_ARGS,
+              "Second argument to Get() or Set() must be a property name string");
+          goto out;
         }
+
       dbus_message_iter_get_basic (&iter, &requested_propname);
       dbus_message_iter_next (&iter);
 
@@ -2016,39 +2238,43 @@ object_registration_message (DBusConnection  *connection,
             {
               if (dbus_message_iter_get_arg_type (&iter) != DBUS_TYPE_VARIANT)
                 {
-                  g_warning ("Property set does not have a variant value as third arg\n");
-                  return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+                  ret = error_or_die (message, DBUS_ERROR_INVALID_ARGS,
+                      "Third argument to Set() must be a variant");
+                  goto out;
                 }
 
               ret = set_object_property (connection, message, &iter,
                                          object, pspec);
               dbus_message_iter_next (&iter);
             }
-          else if (getter)
-            {
-              ret = get_object_property (connection, message,
-                                         object, pspec);
-            }
           else
             {
-              g_assert_not_reached ();
-              ret = NULL;
+              g_assert (getter);
+              ret = get_object_property (connection, message,
+                                         object, pspec);
             }
         }
       else
         {
-          ret = dbus_message_new_error_printf (message,
-                                               DBUS_ERROR_INVALID_ARGS,
-                                               "No such property %s", requested_propname);
+          gchar *error_message = g_strdup_printf ("No such property %s",
+              requested_propname);
+
+          ret = error_or_die (message, DBUS_ERROR_INVALID_ARGS, error_message);
+          g_free (error_message);
         }
     }
 
   g_assert (ret != NULL);
 
+  /* FIXME: this should be returned as a D-Bus error, not spammed out
+   * as a warning. This is too late to do that, though - we've already
+   * had any side-effects we were going to have - and it would break
+   * anything that's relying on ability to give us too many arguments. */
   if (dbus_message_iter_get_arg_type (&iter) != DBUS_TYPE_INVALID)
     g_warning ("Property get, set or set all had too many arguments\n");
 
-  dbus_connection_send (connection, ret, NULL);
+out:
+  connection_send_or_die (connection, ret);
   dbus_message_unref (ret);
   return DBUS_HANDLER_RESULT_HANDLED;
 }
@@ -2068,8 +2294,7 @@ typedef struct {
 } DBusGSignalClosure;
 
 static GClosure *
-dbus_g_signal_closure_new (DBusGConnection *connection,
-			   GObject         *object,
+dbus_g_signal_closure_new (GObject         *object,
 			   const char      *signame,
 			   const char      *sigiface)
 {
@@ -2077,20 +2302,10 @@ dbus_g_signal_closure_new (DBusGConnection *connection,
   
   closure = (DBusGSignalClosure*) g_closure_new_simple (sizeof (DBusGSignalClosure), NULL);
 
-  closure->connection = dbus_g_connection_ref (connection);
   closure->object = object;
   closure->signame = signame;
   closure->sigiface = sigiface;
   return (GClosure*) closure;
-}
-
-static void
-dbus_g_signal_closure_finalize (gpointer data,
-				GClosure *closure)
-{
-  DBusGSignalClosure *sigclosure = (DBusGSignalClosure *) closure;
-
-  dbus_g_connection_unref (sigclosure->connection);
 }
 
 static void
@@ -2104,14 +2319,15 @@ emit_signal_for_registration (ObjectRegistration *o,
   DBusMessageIter iter;
   guint i;
 
+  g_assert (g_variant_is_object_path (o->object_path));
+  g_assert (g_dbus_is_interface_name (sigclosure->sigiface));
+  g_assert (g_dbus_is_member_name (sigclosure->signame));
+
   signal = dbus_message_new_signal (o->object_path,
                                     sigclosure->sigiface,
                                     sigclosure->signame);
   if (!signal)
-    {
-      g_error ("out of memory");
-      return;
-    }
+    oom (NULL);
 
   dbus_message_iter_init_append (signal, &iter);
 
@@ -2126,8 +2342,9 @@ emit_signal_for_registration (ObjectRegistration *o,
           goto out;
         }
     }
-  dbus_connection_send (DBUS_CONNECTION_FROM_G_CONNECTION (sigclosure->connection),
-                        signal, NULL);
+
+  connection_send_or_die (DBUS_CONNECTION_FROM_G_CONNECTION (o->connection),
+      signal);
 out:
   dbus_message_unref (signal);
 }
@@ -2141,15 +2358,19 @@ signal_emitter_marshaller (GClosure        *closure,
 			   gpointer         marshal_data)
 {
   DBusGSignalClosure *sigclosure;
-  GSList *registrations, *iter;
+  const ObjectExport *oe;
+  const GSList *iter;
 
   sigclosure = (DBusGSignalClosure *) closure;
 
   g_assert (retval == NULL);
 
-  registrations = g_object_get_data (sigclosure->object, "dbus_glib_object_registrations");
+  oe = g_object_get_data (sigclosure->object, "dbus_glib_object_registrations");
+  /* If the object has ever been exported, this should exist; it persists until
+   * the object is actually freed. */
+  g_assert (oe != NULL);
 
-  for (iter = registrations; iter; iter = iter->next)
+  for (iter = oe->registrations; iter; iter = iter->next)
     {
       ObjectRegistration *o = iter->data;
 
@@ -2158,7 +2379,7 @@ signal_emitter_marshaller (GClosure        *closure,
 }
 
 static void
-export_signals (DBusGConnection *connection, const GList *info_list, GObject *object)
+export_signals (const GList *info_list, GObject *object)
 {
   GType gtype;
   const char *sigdata;
@@ -2183,6 +2404,20 @@ export_signals (DBusGConnection *connection, const GList *info_list, GObject *ob
 
           sigdata = signal_iterate (sigdata, &iface, &signame);
 
+          if (!g_dbus_is_interface_name (iface))
+            {
+              g_critical ("invalid interface name found in %s: %s",
+                  g_type_name (gtype), iface);
+              continue;
+            }
+
+          if (!g_dbus_is_member_name (signame))
+            {
+              g_critical ("invalid signal name found in %s: %s",
+                  g_type_name (gtype), signame);
+              continue;
+            }
+
           s = _dbus_gutils_wincaps_to_uscore (signame);
 
           id = g_signal_lookup (s, gtype);
@@ -2204,7 +2439,7 @@ export_signals (DBusGConnection *connection, const GList *info_list, GObject *ob
               continue; /* FIXME: these could be listed as methods ? */
             }
           
-          closure = dbus_g_signal_closure_new (connection, object, signame, (char*) iface);
+          closure = dbus_g_signal_closure_new (object, signame, (char*) iface);
           g_closure_set_marshal (closure, signal_emitter_marshaller);
 
           g_signal_connect_closure_by_id (object,
@@ -2213,8 +2448,6 @@ export_signals (DBusGConnection *connection, const GList *info_list, GObject *ob
                           closure,
                           FALSE);
 
-          g_closure_add_finalize_notifier (closure, NULL,
-                           dbus_g_signal_closure_finalize);
           g_free (s);
         }
     }
@@ -2295,7 +2528,7 @@ dbus_error_to_gerror_code (const char *derr)
 /**
  * dbus_set_g_error:
  * @gerror: an error
- * @error: a #DBusError
+ * @derror: a #DBusError
  *
  * Store the information from a DBus method error return into a
  * GError.  For the normal case of an arbitrary remote process,
@@ -2316,23 +2549,27 @@ dbus_error_to_gerror_code (const char *derr)
  */
 void
 dbus_set_g_error (GError    **gerror,
-		  DBusError  *error)
+                  DBusError  *derror)
 {
   int code;
 
-  code = dbus_error_to_gerror_code (error->name);
+  g_return_if_fail (derror != NULL);
+  g_return_if_fail (dbus_error_is_set (derror));
+  g_return_if_fail (gerror == NULL || *gerror == NULL);
+
+  code = dbus_error_to_gerror_code (derror->name);
   if (code != DBUS_GERROR_REMOTE_EXCEPTION)
     g_set_error (gerror, DBUS_GERROR,
 		 code,
 		 "%s",
-		 error->message);
+		 derror->message);
   else
     g_set_error (gerror, DBUS_GERROR,
 		 code,
 		 "%s%c%s",
-		 error->message ? error->message : "",
+		 derror->message ? derror->message : "",
 		 '\0',
-		 error->name);
+		 derror->name);
 }
 
 static void
@@ -2389,7 +2626,7 @@ dbus_glib_global_set_disable_legacy_property_access (void)
  * class_init() for the object class.
  *
  * Once introspection information has been installed, instances of the
- * object registered with #dbus_g_connection_register_g_object() can have
+ * object registered with dbus_g_connection_register_g_object() can have
  * their methods invoked remotely.
  */
 void
@@ -2475,18 +2712,23 @@ dbus_g_error_domain_register (GQuark                domain,
 
 /* Called when the object is destroyed */
 static void
-object_registration_object_died (gpointer user_data, GObject *dead)
+object_export_object_died (gpointer user_data, GObject *dead)
 {
-  ObjectRegistration *o = user_data;
+  ObjectExport *oe = user_data;
 
-  g_assert (dead == o->object);
+  g_assert (dead == oe->object);
 
   /* this prevents the weak unref from taking place, which would cause an
    * assertion failure since the object has already gone... */
-  o->object = NULL;
+  oe->object = NULL;
 
-  /* ... while this results in a call to object_registration_unregistered */
-  dbus_connection_unregister_object_path (DBUS_CONNECTION_FROM_G_CONNECTION (o->connection), o->object_path);
+  /* ... while this results in a call to object_registration_unregistered
+   * for each contained registration */
+  object_export_unregister_all (oe);
+
+  /* We deliberately don't remove the ObjectExport yet, in case the object is
+   * resurrected and re-registered: if that happens, we wouldn't want to call
+   * export_signals() again. */
 }
 
 /**
@@ -2494,31 +2736,40 @@ object_registration_object_died (gpointer user_data, GObject *dead)
  * @connection: the D-BUS connection
  * @object: the object
  *
- * Removes @object from the bus. Properties, methods, and signals
+ * Removes @object from any object paths at which it is exported on
+ * @connection. Properties, methods, and signals
  * of the object can no longer be accessed remotely.
  */
 void
 dbus_g_connection_unregister_g_object (DBusGConnection *connection,
                                        GObject *object)
 {
-  GList *registrations, *iter;
+  ObjectExport *oe;
+  GSList *registrations;
+
+  g_return_if_fail (connection != NULL);
+  g_return_if_fail (G_IS_OBJECT (object));
+
+  oe = g_object_get_data (object, "dbus_glib_object_registrations");
+
+  g_return_if_fail (oe != NULL);
+  g_return_if_fail (oe->registrations != NULL);
 
   /* Copy the list before iterating it: it will be modified in
    * object_registration_free() each time an object path is unregistered.
    */
-  registrations = g_list_copy (g_object_get_data (object, "dbus_glib_object_registrations"));
-
-  g_return_if_fail (registrations != NULL);
-
-  for (iter = registrations; iter; iter = iter->next)
+  for (registrations = g_slist_copy (oe->registrations);
+      registrations != NULL;
+      registrations = g_slist_delete_link (registrations, registrations))
     {
-      ObjectRegistration *o = iter->data;
+      ObjectRegistration *o = registrations->data;
+
+      if (o->connection != connection)
+        continue;
+
       dbus_connection_unregister_object_path (DBUS_CONNECTION_FROM_G_CONNECTION (o->connection),
           o->object_path);
     }
-
-  g_list_free (registrations);
-  g_assert (g_object_get_data (object, "dbus_glib_object_registrations") == NULL);
 }
 
 /**
@@ -2544,19 +2795,50 @@ dbus_g_connection_register_g_object (DBusGConnection       *connection,
                                      const char            *at_path,
                                      GObject               *object)
 {
-  GList *info_list;
-  GSList *registrations, *iter;
+  ObjectExport *oe;
+  GSList *iter;
   ObjectRegistration *o;
-  gboolean is_first_registration;
+  DBusError error;
 
   g_return_if_fail (connection != NULL);
-  g_return_if_fail (at_path != NULL);
+  g_return_if_fail (g_variant_is_object_path (at_path));
   g_return_if_fail (G_IS_OBJECT (object));
 
-  /* This is a GSList of ObjectRegistration*  */
-  registrations = g_object_steal_data (object, "dbus_glib_object_registrations");
+  oe = g_object_get_data (object, "dbus_glib_object_registrations");
 
-  for (iter = registrations; iter; iter = iter->next)
+  if (oe == NULL)
+    {
+      GList *info_list = lookup_object_info (object);
+
+      if (info_list == NULL)
+        {
+          g_warning ("No introspection data registered for object class \"%s\"",
+                     g_type_name (G_TYPE_FROM_INSTANCE (object)));
+          return;
+        }
+
+      /* This adds a hook into every signal for the object.  Only do this
+       * on the first registration, because inside the signal marshaller
+       * we emit a signal for each registration.
+       */
+      export_signals (info_list, object);
+      g_list_free (info_list);
+
+      oe = object_export_new ();
+      g_object_set_data_full (object, "dbus_glib_object_registrations", oe,
+          (GDestroyNotify) object_export_free);
+    }
+
+  if (oe->object == NULL)
+    {
+      /* Either the ObjectExport is newly-created, or it already existed but
+       * the object was disposed and resurrected, causing the weak ref to
+       * fall off */
+      oe->object = object;
+      g_object_weak_ref (object, object_export_object_died, oe);
+    }
+
+  for (iter = oe->registrations; iter; iter = iter->next)
     {
       o = iter->data;
 
@@ -2565,50 +2847,23 @@ dbus_g_connection_register_g_object (DBusGConnection       *connection,
         return;
     }
 
-  is_first_registration = registrations == NULL;
+  o = object_registration_new (connection, at_path, oe);
 
-  /* This is used to hook up signals below, but we do this check
-   * before trying to register the object to make sure we have
-   * introspection data for it.
-   */
-  if (is_first_registration)
+  dbus_error_init (&error);
+  if (!dbus_connection_try_register_object_path (DBUS_CONNECTION_FROM_G_CONNECTION (connection),
+                                                 at_path,
+                                                 &gobject_dbus_vtable,
+                                                 o,
+                                                 &error))
     {
-      info_list = lookup_object_info (object);
-      if (info_list == NULL)
-        {
-          g_warning ("No introspection data registered for object class \"%s\"",
-                     g_type_name (G_TYPE_FROM_INSTANCE (object)));
-          return;
-        }
-    }
-  else
-    info_list = NULL;
-
-  o = object_registration_new (connection, at_path, object);
-
-  if (!dbus_connection_register_object_path (DBUS_CONNECTION_FROM_G_CONNECTION (connection),
-                                             at_path,
-                                             &gobject_dbus_vtable,
-                                             o))
-    {
-      g_error ("Failed to register GObject with DBusConnection");
+      g_error ("Failed to register GObject with DBusConnection: %s %s",
+               error.name, error.message);
+      dbus_error_free (&error);
       object_registration_free (o);
-      g_list_free (info_list);
       return;
     }
 
-  if (is_first_registration)
-    {
-      /* This adds a hook into every signal for the object.  Only do this
-       * on the first registration, because inside the signal marshaller
-       * we emit a signal for each registration.
-       */
-      export_signals (connection, info_list, object);
-      g_list_free (info_list);
-    }
-
-  registrations = g_slist_append (registrations, o);
-  g_object_set_data (object, "dbus_glib_object_registrations", registrations);
+  oe->registrations = g_slist_append (oe->registrations, o);
 }
 
 /**
@@ -2627,6 +2882,9 @@ dbus_g_connection_lookup_g_object (DBusGConnection       *connection,
   gpointer p;
   ObjectRegistration *o;
 
+  g_return_val_if_fail (connection != NULL, NULL);
+  g_return_val_if_fail (g_variant_is_object_path (at_path), NULL);
+
   if (!dbus_connection_get_object_path_data (DBUS_CONNECTION_FROM_G_CONNECTION (connection), at_path, &p))
     return NULL;
 
@@ -2634,7 +2892,11 @@ dbus_g_connection_lookup_g_object (DBusGConnection       *connection,
     return NULL;
 
   o = p;
-  return G_OBJECT (o->object);
+
+  if (o->export->object == NULL)
+    return NULL;
+
+  return G_OBJECT (o->export->object);
 }
 
 typedef struct {
@@ -2778,7 +3040,7 @@ _dbus_gobject_lookup_marshaller (GType        rettype,
  * dbus_g_object_register_marshaller:
  * @marshaller: a GClosureMarshal to be used for invocation
  * @rettype: a GType for the return type of the function
- * @:... The parameter #GTypes, followed by %G_TYPE_INVALID
+ * @...: The parameter #GTypes, followed by %G_TYPE_INVALID
  *
  * Register a #GClosureMarshal to be used for signal invocations,
  * giving its return type and a list of parameter types,
@@ -2817,7 +3079,7 @@ dbus_g_object_register_marshaller (GClosureMarshal  marshaller,
  * @types: a C array of GTypes values
  *
  * Register a #GClosureMarshal to be used for signal invocations.
- * @see_also #dbus_g_object_register_marshaller
+ * @see_also dbus_g_object_register_marshaller()
  */
 void
 dbus_g_object_register_marshaller_array (GClosureMarshal  marshaller,
@@ -2864,6 +3126,8 @@ dbus_g_method_get_sender (DBusGMethodInvocation *context)
 {
   const gchar *sender;
 
+  g_return_val_if_fail (context != NULL, NULL);
+
   sender = dbus_message_get_sender (dbus_g_message_get_message (context->message));
   return g_strdup (sender);
 }
@@ -2881,14 +3145,17 @@ dbus_g_method_get_sender (DBusGMethodInvocation *context)
 DBusMessage *
 dbus_g_method_get_reply (DBusGMethodInvocation *context)
 {
-  return dbus_message_new_method_return (dbus_g_message_get_message (context->message));
+  g_return_val_if_fail (context != NULL, NULL);
+
+  return reply_or_die (dbus_g_message_get_message (context->message));
 }
 
 /**
  * dbus_g_method_send_reply:
- * Send a manually created reply message
  * @context: the method context
  * @reply: the reply message, will be unreffed
+ *
+ * Send a manually created reply message.
  *
  * Used as a sidedoor when you can't generate dbus values
  * of the correct type due to glib binding limitations
@@ -2896,7 +3163,11 @@ dbus_g_method_get_reply (DBusGMethodInvocation *context)
 void
 dbus_g_method_send_reply (DBusGMethodInvocation *context, DBusMessage *reply)
 {
-  dbus_connection_send (dbus_g_connection_get_connection (context->connection), reply, NULL);
+  g_return_if_fail (context != NULL);
+  g_return_if_fail (reply != NULL);
+
+  connection_send_or_die (dbus_g_connection_get_connection (context->connection),
+      reply);
   dbus_message_unref (reply);
 
   dbus_g_connection_unref (context->connection);
@@ -2908,6 +3179,8 @@ dbus_g_method_send_reply (DBusGMethodInvocation *context, DBusMessage *reply)
 /**
  * dbus_g_method_return:
  * @context: the method context
+ * @...: zero or more values to return from the method, with their number
+ *    and types given by its #DBusGObjectInfo
  *
  * Send a return message for a given method invocation, with arguments.
  * This function also frees the sending context.
@@ -2921,14 +3194,16 @@ dbus_g_method_return (DBusGMethodInvocation *context, ...)
   char *out_sig;
   GArray *argsig;
   guint i;
-  
+
+  g_return_if_fail (context != NULL);
+
   /* This field was initialized inside invoke_object_method; we
    * carry it over through the async invocation to here.
    */
   if (!context->send_reply)
     goto out;
 
-  reply = dbus_message_new_method_return (dbus_g_message_get_message (context->message));
+  reply = dbus_g_method_get_reply (context);
   out_sig = method_output_signature_from_object_info (context->object, context->method);
   argsig = _dbus_gtypes_from_arg_signature (out_sig, FALSE);
 
@@ -2947,11 +3222,18 @@ dbus_g_method_return (DBusGMethodInvocation *context, ...)
 	  g_warning("%s", error);
 	  g_free (error);
 	}
-      _dbus_gvalue_marshal (&iter, &value);
+      else
+        {
+          if (!_dbus_gvalue_marshal (&iter, &value))
+            g_warning ("failed to marshal parameter %d for method %s",
+                       i, dbus_message_get_member (
+                         dbus_g_message_get_message (context->message)));
+        }
     }
   va_end (args);
 
-  dbus_connection_send (dbus_g_connection_get_connection (context->connection), reply, NULL);
+  connection_send_or_die (dbus_g_connection_get_connection (context->connection),
+      reply);
   dbus_message_unref (reply);
 
   g_free (out_sig);
@@ -2976,12 +3258,16 @@ dbus_g_method_return_error (DBusGMethodInvocation *context, const GError *error)
 {
   DBusMessage *reply;
 
+  g_return_if_fail (context != NULL);
+  g_return_if_fail (error != NULL);
+
   /* See comment in dbus_g_method_return */
   if (!context->send_reply)
     goto out;
 
   reply = gerror_to_dbus_error_message (context->object, dbus_g_message_get_message (context->message), error);
-  dbus_connection_send (dbus_g_connection_get_connection (context->connection), reply, NULL);
+  connection_send_or_die (
+      dbus_g_connection_get_connection (context->connection), reply);
   dbus_message_unref (reply);
 
 out:
@@ -2993,16 +3279,16 @@ out:
 const char *
 _dbus_gobject_get_path (GObject *obj)
 {
-  GSList *registrations;
+  ObjectExport *oe;
   ObjectRegistration *o;
 
-  registrations = g_object_get_data (obj, "dbus_glib_object_registrations");
+  oe = g_object_get_data (obj, "dbus_glib_object_registrations");
 
-  if (registrations == NULL)
+  if (oe == NULL || oe->registrations == NULL)
     return NULL;
 
   /* First one to have been registered wins */
-  o = registrations->data;
+  o = oe->registrations->data;
 
   return o->object_path;
 }
@@ -3061,10 +3347,9 @@ const DBusGObjectInfo dbus_glib_internal_test_object_info = {
 };
 
 
-/**
- * @ingroup DBusGLibInternals
+/*
  * Unit test for GLib GObject integration ("skeletons")
- * Returns: #TRUE on success.
+ * Returns: %TRUE on success.
  */
 gboolean
 _dbus_gobject_test (const char *test_data_dir)

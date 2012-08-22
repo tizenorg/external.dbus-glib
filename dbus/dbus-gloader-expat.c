@@ -21,6 +21,8 @@
  *
  */
 
+#include <config.h>
+
 #include "dbus-gparser.h"
 #include <expat.h>
 #include <string.h>
@@ -44,7 +46,7 @@ static XML_Memory_Handling_Suite memsuite =
   g_free
 };
 
-/**
+/*
  * Context for Expat parser for introspection data.
  */
 typedef struct

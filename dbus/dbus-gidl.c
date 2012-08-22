@@ -22,9 +22,9 @@
  *
  */
 
-#include "dbus-gidl.h"
+#include <config.h>
 
-#ifndef DOXYGEN_SHOULD_SKIP_THIS
+#include "dbus-gidl.h"
 
 struct BaseInfo
 {
@@ -767,22 +767,3 @@ arg_info_add_annotation (ArgInfo             *info,
 		       g_strdup (name),
 		       g_strdup (value));
 }
-
-
-#ifdef DBUS_BUILD_TESTS
-
-/**
- * @ingroup DBusGIDL
- * Unit test for GLib IDL internals
- * Returns: #TRUE on success.
- */
-gboolean
-_dbus_gidl_test (void)
-{
-
-  return TRUE;
-}
-
-#endif /* DBUS_BUILD_TESTS */
-
-#endif /* DOXYGEN_SHOULD_SKIP_THIS */
