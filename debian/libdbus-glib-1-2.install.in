@@ -1,0 +1,2 @@
+debian/tmp@PREFIX@/lib/libdbus-glib*.so.*
+debian/tmp@PREFIX@/lib/libdbus-glib*.so
