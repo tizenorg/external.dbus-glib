@@ -61,6 +61,10 @@ do
 	done;
 done
 
+# license
+mkdir -p %{buildroot}/usr/share/license
+cp COPYING %{buildroot}/usr/share/license/%{name}
+
 %post -p /sbin/ldconfig
 
 %postun -p /sbin/ldconfig
@@ -69,6 +73,7 @@ done
 %manifest %{name}.manifest
 %{_datadir}/license/%{name}
 %{_libdir}/*glib*.so.*
+/usr/share/license/%{name}
 
 %files devel
 %{_libdir}/lib*.so
