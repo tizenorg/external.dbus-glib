@@ -1,0 +1,71 @@
+dbus-glib (0.88-0slp2) unstable; urgency=low
+
+  * upgrade from 0.80 to 0.88
+  * Git: 165.213.180.234:slp/pkgs/d/dbus-glib
+  * Tag: dbus-glib_0.88-0slp2
+
+ -- Sewook Park <sewook7.park@samsung.com>  Wed, 03 Aug 2011 21:45:16 +0900
+
+dbus-glib (0.80-7slp2) unstable; urgency=low
+
+  * repack
+  * Git: 165.213.180.234:/git/slp/pkgs/dbus-glib
+  * Tag: dbus-glib_0.80-7slp2
+
+ -- Wonguk Jeong <wonguk.jeong@samsung.com>  Tue, 02 Nov 2010 20:27:24 +0900
+
+dbus-glib (0.80-6slp2) unstable; urgency=low
+
+  * upate version
+  * Git: 165.213.180.234:/git/slp/pkgs/dbus-glib
+  * Tag: dbus-glib_0.80-6slp2
+
+ -- Wonguk Jeong <wonguk.jeong@samsung.com>  Tue, 02 Nov 2010 19:42:37 +0900
+
+dbus-glib (0.80-5slp2) unstable; urgency=low
+
+  * add .la file in dev package
+  * Git: 165.213.180.234:/git/slp/pkgs/dbus-glib
+  * Tag: dbus-glib_0.80-5slp2
+
+ -- Wonguk Jeong <wonguk.jeong@samsung.com>  Tue, 02 Nov 2010 11:07:30 +0900
+
+dbus-glib (0.80-4slp2) unstable; urgency=low
+
+  * fix build script for new build system 
+
+ -- Wonguk Jeong <wonguk.jeong@samsung.com>  Tue, 28 Sep 2010 11:37:50 +0900
+
+dbus-glib (0.80-3slp2) unstable; urgency=low
+
+  * remove tag
+
+ -- Youmin Ha <youmin.ha@samsung.com>  Fri, 09 Jul 2010 09:00:08 +0900
+
+dbus-glib (0.80-2slp2) unstable; urgency=low
+
+  * Change maintainer
+  * Git: 165.213.180.234:/git/slp2.0/slp2.0-pkgs/dbus-glib-0.80
+  * Tag: dbus-glib_0.80-2slp2
+
+ -- Youmin Ha <youmin.ha@samsung.com>  Thu, 08 Jul 2010 20:45:47 +0900
+
+dbus-glib (0.80-1slp2) unstable; urgency=low
+
+  * apply DAC
+  * Git: 165.213.180.234:/git/slp2.0/slp2.0-pkgs/dbus-glib-0.80
+  * Tag: dbus-glib_0.80-1slp2
+
+ -- lee ho-jun <rcn95@samsung.com>  Tue, 20 Apr 2010 23:20:54 -0700
+
+dbus-glib (0.80-0slp2) unstable; urgency=low
+
+  * reupload it because of changing pkgname
+
+ -- lee ho-jun <rcn95@samsung.com>  Mon, 29 Mar 2010 22:35:12 -0700
+
+dbus-glib (0.80) unstable; urgency=low
+
+  * Initial Release.
+
+ -- wonguk.jeong <wonguk.jeong@samsung.com>  Fri, 13 Nov 2009 10:41:07 +0900

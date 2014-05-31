@@ -1,0 +1,14 @@
+#!/bin/sh
+if [ ${USER} == "root" ]
+then
+	# Change file owner
+	# 1. libraries
+	# 2. executables
+	chown root:root /usr/bin/dbus-binding-tool
+	# 3. configurations
+fi
+# Change file permissions
+# 1. libraries
+# 2. executables
+chmod 700 /usr/bin/dbus-binding-tool
+# 3. configurations
