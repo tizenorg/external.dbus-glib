@@ -49,7 +49,7 @@ rm -rf $RPM_BUILD_ROOT/usr/share/gtk-doc
 
 # don't care about bash completion in a consumer device
 rm -rf $RPM_BUILD_ROOT/etc/bash_completion.d/dbus-bash-completion.sh
-rm -rf $RPM_BUILD_ROOT/usr/libexec/dbus-bash-completion-helper
+rm -rf $RPM_BUILD_ROOT/%{_libexecdir}/dbus-bash-completion-helper
 
 mkdir -p $RPM_BUILD_ROOT%{_datadir}/license
 for keyword in LICENSE COPYING COPYRIGHT;
